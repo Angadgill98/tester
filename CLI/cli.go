@@ -117,6 +117,7 @@ func (cli *CLI) ProcessCreate(input string) {
 
 		validTypes := map[string]bool{
 			"http":   true,
+			"ws":	true,
 		}
 
 		for {
@@ -138,6 +139,8 @@ func (cli *CLI) ProcessCreate(input string) {
 
 			fmt.Println("Invalid action type. Please try again.")
 		}
+
+		
 
 		opts := Actions.Action_opts{
 			Action_type: actionType,

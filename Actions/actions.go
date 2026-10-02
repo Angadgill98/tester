@@ -171,6 +171,13 @@ func (this *Actions_obj) CreateAction(action_name string,opts Action_opts) bool 
 			return false
 		}
 
+	case "ws":
+		fmt.Println("Creating WS action")
+
+		fmt.Println("Setitng up WS Action File")
+		action.CreateWsFile();
+		
+
 	
 	default:
 		fmt.Println("Invalid action type:", opts.Action_type)
