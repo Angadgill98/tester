@@ -393,3 +393,52 @@ func (this *Actions_obj) DeleteConfig(actionName string) error {
 }
 
 
+
+
+
+
+func (this *Action) CreateWsFile() {
+	code := `
+package data_actions
+
+import (
+	"fmt"
+
+	"github.com/gorilla/websocket"
+	"tester/data"
+)
+
+func StartAction_Action_name(url string) (*websocket.Conn, error) {
+	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
+}
+
+func HandleAction_Action_name(conn *websocket.Conn, prevReq *data.ActionResponse, sequnces *data.SequnceState) *data.ActionResponse {
+	_, message, err := conn.ReadMessage()
+	if err != nil {
+		fmt.Println("Failed to receive WebSocket message:", err)
+		return &data.ActionResponse{}
+	}
+
+	return &data.ActionResponse{
+		Body:   string(message),
+		Status: "received",
+		Data:   make(map[string]any),
+	}
+}
+`
+
+	code = strings.ReplaceAll(code, "Action_name", this.Name)
+
+	err := os.WriteFile(this.Path+this.Name+".go", []byte(code), 0644)
+	if err != nil {
+		fmt.Println("Error creating WebSocket action file:", err)
+		return
+	}
+
+	fmt.Println("WebSocket action file created:", this.Path)
+}

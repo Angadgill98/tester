@@ -3,27 +3,32 @@ package tester
 import (
 	"fmt"
 	"net/http"
+
+	"github.com/gorilla/websocket"
+
 	actions "tester/Actions"
 	"tester/data"
 )
 
-
 type Tester struct {
-	Client http.Client
-	Prev_res data.ActionResponse
+	Client         http.Client
+	WebSocket      *websocket.Conn
+	Prev_res       data.ActionResponse
 	Sequence_state data.SequnceState
 }
 
 func CreateTesterObj() Tester {
 	return Tester{
-		Client:         http.Client{},
-		Prev_res:       data.ActionResponse{},
+		Client:    http.Client{},
+		WebSocket: nil,
+		Prev_res:  data.ActionResponse{},
 		Sequence_state: data.SequnceState{
-			State: make(map[string]data.ActionResponse),
+			State:      make(map[string]data.ActionResponse),
 			CustomData: make(map[string]any),
 		},
 	}
 }
+
 
 func (tester *Tester) SetUpTester() {
 	fmt.Println("Setting up tester");
