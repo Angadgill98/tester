@@ -6,7 +6,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	actions "tester/Actions"
+	// actions "tester/Actions"
 	"tester/data"
 )
 
@@ -39,10 +39,10 @@ func (tester *Tester) SetUpTester() {
 
 
 
-func (tester *Tester) ExecuteAction(action actions.Action) data.ActionResponse  {
-	var res = *action.Executor(&tester.Client, &tester.Prev_res, &tester.Sequence_state)
-	return  res
-}
+// func (tester *Tester) ExecuteAction(action actions.Actions_obj) data.ActionResponse  {
+// 	var res = *action.Executor(&tester.Client, &tester.Prev_res, &tester.Sequence_state)
+// 	return  res
+// }
 
 func (tester *Tester) ShowState() {
 	fmt.Println()

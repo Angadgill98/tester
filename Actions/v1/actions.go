@@ -13,6 +13,7 @@ import (
 
 type Actions_obj struct{
 	Actions map[string]Action
+	WS_Actions  map[string]WsAction
 	Config map[string]func(*http.Client, *data.ActionResponse, *data.SequnceState) *data.ActionResponse
 	WS_congif  map[string]map[string]any
 }
@@ -20,6 +21,7 @@ type Actions_obj struct{
 func CreateActionsObj() Actions_obj {
 	return Actions_obj{
 		Actions: make(map[string]Action),
+		WS_Actions: make(map[string]WsAction),
 		Config:  ActionsConfig,
 		WS_congif: WSConfig,
 	}
@@ -58,8 +60,19 @@ func (this *Actions_obj) SetupActions() {
 
 	fmt.Printf("Loaded %d actions\n", len(actions))
 
-	
-}
+	wsActions, err := this.ReadWsActionsFiles()
+	if err != nil {
+		fmt.Println("Failed to read WS Actions files:", err)
+		return
+	}
+
+	for _, action := range wsActions {
+		this.WS_Actions[action.Name] = action
+	}
+
+	fmt.Printf("Loaded %d WS actions\n", len(wsActions))
+
+}	
 
 
 
@@ -170,6 +183,60 @@ func (this *Actions_obj) ReadActionsFiles() ([]Action, error) {
 }
 
 
+func (this *Actions_obj) ReadWsActionsFiles() ([]WsAction, error) {
+	entries, err := os.ReadDir(ActionFS_path + "ws/")
+	if err != nil {
+		return nil, err
+	}
+
+	var actionsList []WsAction
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if entry.Name() == "tmp.go" {
+			continue
+		}
+
+		fmt.Printf("In WS Action FS found the action File:%v\n", entry.Name())
+
+		fileName := strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
+		parts := strings.SplitN(fileName, "_", 3)
+
+		if len(parts) != 3 {
+			continue
+		}
+
+		eventName := parts[0]
+		actionName := parts[2]
+
+		eventConfig, ok := WSConfig[eventName]
+		if !ok {
+			fmt.Printf("WS Event not found in config:%v\n", eventName)
+			continue
+		}
+
+		executor, ok := eventConfig[actionName]
+		if !ok {
+			fmt.Printf("WS Action not found in config:%v\n", actionName)
+			continue
+		}
+
+		action := WsAction{
+			Event: eventName,
+			Name: actionName,
+			Path: ActionFS_path + "ws/",
+			Executor: executor,
+		}
+
+		fmt.Printf("WS Event:%v Action:%v\n", eventName, actionName)
+
+		actionsList = append(actionsList, action)
+	}
+
+	return actionsList, nil
+}
 
 type Action struct{
 	Name string
@@ -177,6 +244,14 @@ type Action struct{
 	Executor func(*http.Client, *data.ActionResponse, *data.SequnceState) *data.ActionResponse
 
 }
+
+type WsAction struct {
+	Name string
+	Path string
+	Event string
+	Executor any
+}
+
 type ActionType string
 
 const (
@@ -493,7 +568,7 @@ func StartAction_Action_name(url string) (*websocket.Conn, error) {
 
 	code = strings.ReplaceAll(code, "Action_name", this.Name)
 
-	err := os.WriteFile(this.Path+this.Name+".go", []byte(code), 0644)
+	err := os.WriteFile(this.Path+"Connect"+this.Name+".go", []byte(code), 0644)
 	if err != nil {
 		fmt.Println("Error creating WebSocket connect action file:", err)
 		return
@@ -518,7 +593,7 @@ func WS_send_Action_name(conn *websocket.Conn, prevReq *data.ActionResponse, seq
 
 	code = strings.ReplaceAll(code, "Action_name", this.Name)
 
-	err := os.WriteFile(this.Path+this.Name+".go", []byte(code), 0644)
+	err := os.WriteFile(this.Path+"Send"+this.Name+".go", []byte(code), 0644)
 	if err != nil {
 		fmt.Println("Error creating WebSocket send action file:", err)
 		return
@@ -543,7 +618,7 @@ func WS_handle_Action_name(conn *websocket.Conn, prevReq *data.ActionResponse, s
 
 	code = strings.ReplaceAll(code, "Action_name", this.Name)
 
-	err := os.WriteFile(this.Path+this.Name+".go", []byte(code), 0644)
+	err := os.WriteFile(this.Path+"Receive"+this.Name+".go", []byte(code), 0644)
 	if err != nil {
 		fmt.Println("Error creating WebSocket receive action file:", err)
 		return

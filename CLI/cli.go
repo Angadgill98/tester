@@ -6,19 +6,20 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
 	Actions "tester/Actions"
 	Sequences "tester/Sequences"
 	tester "tester/Tester"
 )
 
 type CLI struct {
-	actions *Actions.Actions_obj
+	actions   *Actions.Actions_obj
 	sequences *Sequences.Sequences_obj
 }
 
-func CreateCLI(actions *Actions.Actions_obj,sequences *Sequences.Sequences_obj) *CLI {
+func CreateCLI(actions *Actions.Actions_obj, sequences *Sequences.Sequences_obj) *CLI {
 	return &CLI{
-		actions: actions,
+		actions:   actions,
 		sequences: sequences,
 	}
 }
@@ -29,8 +30,9 @@ func (cli *CLI) Init() {
 	fmt.Println("  create action <action_name>")
 	fmt.Println("  create sequence <sequence_name>")
 	fmt.Println("  delete action <action_name>")
+	fmt.Println("  delete sequence <sequence_name>")
 	fmt.Println("  sequence add-action <sequence_name>")
-	fmt.Println("  execute actions")
+	fmt.Println("  execute action")
 	fmt.Println("  execute sequence <sequence_name>")
 	fmt.Println("  show")
 	fmt.Println("  exit")
@@ -74,7 +76,7 @@ func (cli *CLI) ProcessCommand(input string) {
 	switch command {
 	case "create":
 		cli.ProcessCreate(remaining)
-	
+
 	case "delete":
 		cli.ProcessDelete(remaining)
 
@@ -116,12 +118,12 @@ func (cli *CLI) ProcessCreate(input string) {
 		scanner := bufio.NewScanner(os.Stdin)
 
 		validTypes := map[string]bool{
-			"http":   true,
-			"ws":	true,
+			"http": true,
+			"ws":   true,
 		}
 
 		for {
-			fmt.Print("Enter action type (http/ws/.. or 'exit': ")
+			fmt.Print("Enter action type (http/ws or 'exit'): ")
 
 			if !scanner.Scan() {
 				return
@@ -140,47 +142,55 @@ func (cli *CLI) ProcessCreate(input string) {
 			fmt.Println("Invalid action type. Please try again.")
 		}
 
-		opts := Actions.Action_opts{}
+		var opts Actions.Action_opts
 
 		if actionType == "ws" {
-			opts.Action_type=Actions.ActionTypeWS
-			opts.WS = &Actions.WS_opts{}
+			opts.Action_type = Actions.ActionTypeWS
+
 			validWSEvents := map[string]bool{
-				"connect": true,
-				"send":    true,
-				"receive": true,
+				"Send":    true,
+				"Connect": true,
+				"Recieve": true,
 			}
 
+			var wsEvent string
+
 			for {
-				fmt.Print("Enter WebSocket event (connect/send/receive): ")
+				fmt.Print("Enter WebSocket event (Send/Connect/Recieve): ")
 
 				if !scanner.Scan() {
 					return
 				}
 
-				wsEvent := strings.TrimSpace(scanner.Text())
+				wsEvent = strings.TrimSpace(scanner.Text())
 
 				if validWSEvents[wsEvent] {
-					opts.WS.Event = wsEvent
 					break
 				}
 
 				fmt.Println("Invalid WebSocket event. Please try again.")
 			}
-		}else{
-			opts.Action_type=Actions.ActionTypeHTTP
-		}
-			
 
-		
+			opts.Opts = Actions.WS_opts{
+				Executor_type: wsEvent,
+			}
+
+	
+
+		} else {
+			opts.Action_type = Actions.ActionTypeHTTP
+
+			opts.Opts = Actions.HTTP_opts{
+				Executor_type: "req",
+			}
+		}
 
 		created := cli.actions.CreateAction(actionName, opts)
-
 
 		if created {
 			fmt.Println("Action created successfully:", actionName)
 		} else {
-			fmt.Println("Action alredu exist")
+			fmt.Println("Action already exists")
 		}
 
 	case "sequence":
@@ -206,12 +216,12 @@ func (cli *CLI) ProcessCreate(input string) {
 	}
 }
 
-
 func (cli *CLI) ProcessDelete(input string) {
 	parts := strings.Fields(input)
 
-	if len(parts) < 2 {
+	if len(parts) == 0 {
 		fmt.Println("Usage: delete action <action_name>")
+		fmt.Println("       delete sequence <sequence_name>")
 		return
 	}
 
@@ -226,12 +236,21 @@ func (cli *CLI) ProcessDelete(input string) {
 
 		actionName = strings.ReplaceAll(actionName, " ", "_")
 
-		deleted := cli.actions.DeleteAction(actionName)
+		deleted := false
+
+		if _, exists := cli.actions.Http.Http_actions[actionName]; exists {
+			deleted = cli.actions.DeleteHttpAction(actionName)
+		} else if _, exists := cli.actions.WS.WS_actions[actionName]; exists {
+			deleted = cli.actions.DeleteWsAction(actionName)
+		} else {
+			fmt.Println("Action does not exist:", actionName)
+			return
+		}
 
 		if deleted {
 			fmt.Println("Action deleted successfully:", actionName)
 		} else {
-			fmt.Println("Action does not exist:", actionName)
+			fmt.Println("Failed to delete action:", actionName)
 		}
 
 	case "sequence":
@@ -257,13 +276,11 @@ func (cli *CLI) ProcessDelete(input string) {
 	}
 }
 
-
-
 func (cli *CLI) ProcessSequence(input string) {
 	parts := strings.Fields(input)
 
 	if len(parts) == 0 {
-		fmt.Println("Usage: sequence add-action <sequence_name> <action_name>")
+		fmt.Println("Usage: sequence add-action <sequence_name>")
 		return
 	}
 
@@ -275,6 +292,7 @@ func (cli *CLI) ProcessSequence(input string) {
 		}
 
 		sequenceName := parts[1]
+
 		_, exists := cli.sequences.Sequences[sequenceName]
 
 		if !exists {
@@ -288,16 +306,41 @@ func (cli *CLI) ProcessSequence(input string) {
 			fmt.Println("exit. Exit")
 			fmt.Println("0. Back")
 
-			actionNames := make([]string, 0, len(cli.actions.Actions))
+			type ActionEntry struct {
+				Name      string
+				ActionType Actions.ActionType
+				Action     any
+			}
+
+			var availableActions []ActionEntry
 
 			i := 1
-			for actionName := range cli.actions.Actions {
-				fmt.Printf("%d. %s\n", i, actionName)
-				actionNames = append(actionNames, actionName)
+
+			for actionName, action := range cli.actions.Http.Http_actions {
+				fmt.Printf("%d. %s [HTTP]\n", i, actionName)
+
+				availableActions = append(availableActions, ActionEntry{
+					Name:       actionName,
+					ActionType: Actions.ActionTypeHTTP,
+					Action:     action,
+				})
+
 				i++
 			}
 
-			if len(actionNames) == 0 {
+			for actionName, action := range cli.actions.WS.WS_actions {
+				fmt.Printf("%d. %s [WS]\n", i, actionName)
+
+				availableActions = append(availableActions, ActionEntry{
+					Name:       actionName,
+					ActionType: Actions.ActionTypeWS,
+					Action:     action,
+				})
+
+				i++
+			}
+
+			if len(availableActions) == 0 {
 				fmt.Println("No actions available")
 				return
 			}
@@ -307,6 +350,7 @@ func (cli *CLI) ProcessSequence(input string) {
 			fmt.Print("Choose action number: ")
 
 			_, err := fmt.Scanln(&choice)
+
 			if err != nil {
 				fmt.Println("Invalid input")
 				continue
@@ -320,72 +364,82 @@ func (cli *CLI) ProcessSequence(input string) {
 				break
 			}
 
-			var actionNumber int
+			actionNumber, err := strconv.Atoi(choice)
 
-			_, err = fmt.Sscanf(choice, "%d", &actionNumber)
 			if err != nil {
 				fmt.Println("Invalid input")
 				continue
 			}
 
-			if actionNumber < 1 || actionNumber > len(actionNames) {
+			if actionNumber < 1 || actionNumber > len(availableActions) {
 				fmt.Println("Invalid action number")
 				continue
 			}
 
-			actionName := actionNames[actionNumber-1]
+			selected := availableActions[actionNumber-1]
 
-			// Add action to sequence here
-			action := cli.actions.Actions[actionName]
-
-			fmt.Println("Selected action:", actionName)
+			fmt.Println("Selected action:", selected.Name)
 			fmt.Println("Adding it to the sequence:", sequenceName)
 
-
-	
-			added := cli.sequences.AddActionToSequence(sequenceName, action)
+			added := cli.sequences.AddActionToSequence(sequenceName, selected.Action)
 
 			if added {
-				fmt.Println("Action added successfully:", actionName)
+				fmt.Println("Action added successfully:", selected.Name)
 			} else {
-				fmt.Println("Failed to add action:", actionName)
+				fmt.Println("Failed to add action:", selected.Name)
 			}
-
-
 		}
-
-
-		
-
-	
-
-		
 
 	default:
 		fmt.Println("Unknown sequence command:", parts[0])
 	}
 }
 
-
 func (cli *CLI) ShowState() {
 	fmt.Println()
 	fmt.Println("========== CURRENT STATE ==========")
 
 	fmt.Println()
-	fmt.Println("---------- ACTIONS ----------")
-	fmt.Printf("Total Actions: %d\n", len(cli.actions.Actions))
+	fmt.Println("---------- HTTP ACTIONS ----------")
+	fmt.Printf("Total HTTP Actions: %d\n", len(cli.actions.Http.Http_actions))
 
-	for actionName, action := range cli.actions.Actions {
+	for actionName, action := range cli.actions.Http.Http_actions {
 		fmt.Println("Action:", actionName)
 		fmt.Println("  Name:", action.Name)
 		fmt.Println("  Path:", action.Path)
+		fmt.Println("  Executor Type:", action.Executor_type)
+		fmt.Println("  Executor Function:", action.Executor_function_name)
 	}
 
 	fmt.Println()
-	fmt.Println("---------- ACTION CONFIG ----------")
-	fmt.Printf("Total Config Entries: %d\n", len(cli.actions.Config))
+	fmt.Println("---------- HTTP ACTION CONFIG ----------")
+	fmt.Printf("Total Config Entries: %d\n", len(cli.actions.Http.Config["http"]))
 
-	for actionName, executor := range cli.actions.Config {
+	for actionName, executor := range cli.actions.Http.Config["http"] {
+		if executor != nil {
+			fmt.Printf("Config: %s -> function installed\n", actionName)
+		} else {
+			fmt.Printf("Config: %s -> function NOT installed, need to restart\n", actionName)
+		}
+	}
+
+	fmt.Println()
+	fmt.Println("---------- WS ACTIONS ----------")
+	fmt.Printf("Total WS Actions: %d\n", len(cli.actions.WS.WS_actions))
+
+	for actionName, action := range cli.actions.WS.WS_actions {
+		fmt.Println("Action:", actionName)
+		fmt.Println("  Name:", action.Name)
+		fmt.Println("  Path:", action.Path)
+		fmt.Println("  Executor Type:", action.Exector_type)
+		fmt.Println("  Executor Function:", action.Executor_function_name)
+	}
+
+	fmt.Println()
+	fmt.Println("---------- WS ACTION CONFIG ----------")
+	fmt.Printf("Total Config Entries: %d\n", len(cli.actions.WS.Config["ws"]))
+
+	for actionName, executor := range cli.actions.WS.Config["ws"] {
 		if executor != nil {
 			fmt.Printf("Config: %s -> function installed\n", actionName)
 		} else {
@@ -397,12 +451,30 @@ func (cli *CLI) ShowState() {
 	fmt.Println("---------- SEQUENCES ----------")
 	fmt.Printf("Total Sequences: %d\n", len(cli.sequences.Sequences))
 
-	for sequenceName, sequence := range cli.sequences.Sequences {
+	for sequenceName, sequenceActions := range cli.sequences.Sequences {
 		fmt.Println("Sequence:", sequenceName)
-		fmt.Printf("  Actions: %d\n", len(sequence.Actions_to_execute))
+		fmt.Printf("  Actions: %d\n", len(sequenceActions))
 
-		for i, action := range sequence.Actions_to_execute {
-			fmt.Printf("    %d. %s\n", i+1, action.Name)
+		for i, sequenceAction := range sequenceActions {
+			switch sequenceAction.Action_type {
+			case Actions.ActionTypeHTTP:
+				if sequenceAction.HTTP_action != nil {
+					fmt.Printf(
+						"    %d. %s [HTTP]\n",
+						i+1,
+						sequenceAction.HTTP_action.Name,
+					)
+				}
+
+			case Actions.ActionTypeWS:
+				if sequenceAction.WS_action != nil {
+					fmt.Printf(
+						"    %d. %s [WS]\n",
+						i+1,
+						sequenceAction.WS_action.Name,
+					)
+				}
+			}
 		}
 	}
 
@@ -410,11 +482,29 @@ func (cli *CLI) ShowState() {
 	fmt.Println("---------- SEQUENCE CONFIG ----------")
 	fmt.Printf("Total Config Entries: %d\n", len(cli.sequences.Config))
 
-	for sequenceName, actionNames := range cli.sequences.Config {
+	for sequenceName, sequenceActions := range cli.sequences.Config {
 		fmt.Println("Sequence:", sequenceName)
 
-		for i, actionName := range actionNames {
-			fmt.Printf("  %d. %s\n", i+1, actionName)
+		for i, sequenceAction := range sequenceActions {
+			switch sequenceAction.Action_type {
+			case Actions.ActionTypeHTTP:
+				if sequenceAction.HTTP_action != nil {
+					fmt.Printf(
+						"  %d. %s [HTTP]\n",
+						i+1,
+						sequenceAction.HTTP_action.Name,
+					)
+				}
+
+			case Actions.ActionTypeWS:
+				if sequenceAction.WS_action != nil {
+					fmt.Printf(
+						"  %d. %s [WS]\n",
+						i+1,
+						sequenceAction.WS_action.Name,
+					)
+				}
+			}
 		}
 	}
 
@@ -423,12 +513,11 @@ func (cli *CLI) ShowState() {
 	fmt.Println()
 }
 
-
 func (cli *CLI) ProcessExecute(input string) {
 	parts := strings.Fields(input)
 
 	if len(parts) < 1 {
-		fmt.Println("Usage: execute action <action_name>")
+		fmt.Println("Usage: execute action")
 		fmt.Println("       execute sequence <sequence_name>")
 		return
 	}
@@ -436,8 +525,10 @@ func (cli *CLI) ProcessExecute(input string) {
 	switch parts[0] {
 	case "action":
 		fmt.Println("Starting Temp Sequence")
-		var tester=tester.CreateTesterObj()
-		var counter=0;
+
+		actionTester := tester.CreateTesterObj()
+		counter := 0
+
 		for {
 			fmt.Println()
 			fmt.Println("========== EXECUTE ACTION ==========")
@@ -445,16 +536,38 @@ func (cli *CLI) ProcessExecute(input string) {
 			fmt.Println("exit. Exit")
 			fmt.Println("0. Back")
 
-			actionNames := make([]string, 0, len(cli.actions.Actions))
+			type ActionEntry struct {
+				Name   string
+				Action any
+			}
+
+			var availableActions []ActionEntry
 
 			i := 1
-			for actionName := range cli.actions.Actions {
-				fmt.Printf("%d. %s\n", i, actionName)
-				actionNames = append(actionNames, actionName)
+
+			for actionName, action := range cli.actions.Http.Http_actions {
+				fmt.Printf("%d. %s [HTTP]\n", i, actionName)
+
+				availableActions = append(availableActions, ActionEntry{
+					Name:   actionName,
+					Action: action,
+				})
+
 				i++
 			}
 
-			if len(actionNames) == 0 {
+			for actionName, action := range cli.actions.WS.WS_actions {
+				fmt.Printf("%d. %s [WS]\n", i, actionName)
+
+				availableActions = append(availableActions, ActionEntry{
+					Name:   actionName,
+					Action: action,
+				})
+
+				i++
+			}
+
+			if len(availableActions) == 0 {
 				fmt.Println("No actions available")
 				return
 			}
@@ -464,6 +577,7 @@ func (cli *CLI) ProcessExecute(input string) {
 			fmt.Print("Choose action number: ")
 
 			_, err := fmt.Scanln(&choice)
+
 			if err != nil {
 				fmt.Println("Invalid input")
 				continue
@@ -477,72 +591,100 @@ func (cli *CLI) ProcessExecute(input string) {
 				break
 			}
 
-			var actionNumber int
+			actionNumber, err := strconv.Atoi(choice)
 
-			_, err = fmt.Sscanf(choice, "%d", &actionNumber)
 			if err != nil {
 				fmt.Println("Invalid input")
 				continue
 			}
 
-			if actionNumber < 1 || actionNumber > len(actionNames) {
+			if actionNumber < 1 || actionNumber > len(availableActions) {
 				fmt.Println("Invalid action number")
 				continue
 			}
 
-			actionName := actionNames[actionNumber-1]
-			action := cli.actions.Actions[actionName]
+			selected := availableActions[actionNumber-1]
 
-			fmt.Println("Selected action:", actionName)
+			fmt.Println("Selected action:", selected.Name)
 
-			if action.Executor == nil {
-				fmt.Println("Action is not executable. Restart the application first.")
-				continue
+			switch action := selected.Action.(type) {
+			case Actions.Http_actions:
+				fmt.Println("HTTP action selected:", action.Name)
+
+				/*
+					Your current Tester.ExecuteAction accepts
+					the old action structure.
+
+					This section should be updated when Tester
+					is changed to accept Http_actions/WsAction.
+				*/
+
+				fmt.Println("HTTP execution selected:", action.Name)
+
+			case Actions.WsAction:
+				fmt.Println("WS action selected:", action.Name)
+				fmt.Println("WebSocket execution is not implemented yet.")
 			}
 
-			// Execute action here
-			fmt.Println("Executing:", actionName)
-			var res=tester.ExecuteAction(action)
-			tester.Sequence_state.State[action.Name+"_"+strconv.Itoa(counter)] = res
-
-			tester.Prev_res=res
-
-			tester.ShowState()
-
-			counter++;
+			counter++
+			_ = actionTester
+			_ = counter
 		}
 
 	case "sequence":
 		sequenceName := strings.TrimSpace(strings.TrimPrefix(input, "sequence"))
 
 		sequence, exists := cli.sequences.Sequences[sequenceName]
+
 		if !exists {
 			fmt.Println("Sequence does not exist:", sequenceName)
 			return
 		}
 
 		fmt.Println("Executing sequence:", sequenceName)
-		var tester=tester.CreateTesterObj()
 
+		actionTester := tester.CreateTesterObj()
 
-		for i, action := range sequence.Actions_to_execute {
-			fmt.Printf("Executing action %d: %s\n", i+1, action.Name)
+		for i, sequenceAction := range sequence {
+			switch sequenceAction.Action_type {
+			case Actions.ActionTypeHTTP:
+				if sequenceAction.HTTP_action == nil {
+					fmt.Println("HTTP action is nil")
+					return
+				}
 
-			if action.Executor == nil {
-				fmt.Println("Action is not executable:", action.Name)
-				fmt.Println("Restart the application to load the action")
-				return
+				action := sequenceAction.HTTP_action
+
+				fmt.Printf(
+					"Executing action %d: %s [HTTP]\n",
+					i+1,
+					action.Name,
+				)
+
+				/*
+					Update this when Tester.ExecuteAction
+					accepts the new Http_actions object.
+				*/
+
+			case Actions.ActionTypeWS:
+				if sequenceAction.WS_action == nil {
+					fmt.Println("WS action is nil")
+					return
+				}
+
+				action := sequenceAction.WS_action
+
+				fmt.Printf(
+					"Executing action %d: %s [WS]\n",
+					i+1,
+					action.Name,
+				)
+
+				fmt.Println("WebSocket execution is not implemented yet.")
 			}
-
-			// execute action here
-			var res=tester.ExecuteAction(action)
-			tester.Sequence_state.State[action.Name+"_"+strconv.Itoa(i)] = res
-
-			tester.Prev_res=res
-
 		}
 
-		tester.ShowState()
+		actionTester.ShowState()
 
 	default:
 		fmt.Println("Unknown execute type:", parts[0])

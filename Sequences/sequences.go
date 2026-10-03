@@ -9,25 +9,26 @@ import (
 )
 
 type Sequences_obj struct {
-	Sequences map[string]Sequence
-	Config map[string][]string
+	Sequences map[string][]SequenceAction
+	Config    map[string][]SequenceAction
 }
 
 func CreateSequencesObj() Sequences_obj {
 	return Sequences_obj{
-		Sequences: make(map[string]Sequence),
-		Config:Sequence_Config,
-
+		Sequences: Sequence_Config,
+		Config:    Sequence_Config,
 	}
 }
 
-var SequenceFS_path = "data/sequences/"
-
-type Sequence struct {
-	Sequence_name     string
-	Actions_to_execute []actions.Action
-	path             string
+type SequenceAction struct {
+	Action_type actions.ActionType
+	HTTP_action *actions.Http_actions
+	WS_action   *actions.WsAction
 }
+
+
+
+
 
 func (this *Sequences_obj) SetupSequences(actions_obj actions.Actions_obj) {
 	isok, err := this.CheckSequencesFS()
@@ -43,7 +44,6 @@ func (this *Sequences_obj) SetupSequences(actions_obj actions.Actions_obj) {
 
 	fmt.Println("Sequences FS Setup OK")
 
-	this.LoadSequences(actions_obj)
 
 	fmt.Printf("Loaded %d sequences\n", len(this.Sequences))
 
@@ -53,8 +53,8 @@ func (this *Sequences_obj) SetupSequences(actions_obj actions.Actions_obj) {
 }
 
 func (this *Sequences_obj) CheckSequencesFS() (bool, error) {
-	
-	_, err := os.Stat("Sequences/"+"sequences_config.go")
+	_, err := os.Stat("Sequences/sequences_config.go")
+
 	if err != nil {
 		if os.IsNotExist(err) {
 			fmt.Println("sequences_config doesn't exist")
@@ -74,104 +74,108 @@ func (this *Sequences_obj) CheckSequencesFS() (bool, error) {
 }
 
 
-func (this *Sequences_obj) LoadSequences(actions_obj actions.Actions_obj) {
-	for sequenceName, actionNames := range this.Config {
-		var sequenceActions []actions.Action
 
-		for _, actionName := range actionNames {
-			action, exists := actions_obj.Actions[actionName]
-			if !exists {
-				fmt.Println("Action does not exist:", actionName)
-				continue
-			}
-
-			sequenceActions = append(sequenceActions, action)
-		}
-
-		sequence := Sequence{
-			Sequence_name:       sequenceName,
-			Actions_to_execute: sequenceActions,
-			path:                 SequenceFS_path,
-		}
-
-		this.Sequences[sequenceName] = sequence
-	}
-}
-
-
-
-func (this *Sequences_obj) CreateSequence(SequenceName string) bool {
-	if _, exists := this.Sequences[SequenceName]; exists {
-		fmt.Println("Sequence already exists:", SequenceName)
+func (this *Sequences_obj) CreateSequence(sequenceName string) bool {
+	if _, exists := this.Sequences[sequenceName]; exists {
+		fmt.Println("Sequence already exists:", sequenceName)
 		return false
 	}
 
-	Sequence := Sequence{
-		Sequence_name:       SequenceName,
-		Actions_to_execute: []actions.Action{},
-		path:               SequenceFS_path,
-	}
+	this.Sequences[sequenceName] = []SequenceAction{}
+	this.Config[sequenceName] = []SequenceAction{}
 
-	
+	err := CreateCodeSequenceConfig(this.Sequences)
 
-	err := this.UpdateConfig(SequenceName)
 	if err != nil {
 		fmt.Println("Failed to update sequences config:", err)
 		return false
 	}
 
-	this.Sequences[SequenceName] = Sequence
-	this.Config[SequenceName]=make([]string, 0)
-
 	return true
 }
 
 
+var config_file_path = "Sequences/"
 
-var config_file_path="Sequences/"
-func (this *Sequences_obj) UpdateConfig(sequenceName string) error {
-	configPath := config_file_path + "/sequences_config.go"
 
-	code, err := os.ReadFile(configPath)
+func CreateCodeSequenceConfig(sequences map[string][]SequenceAction) error {
+	var builder strings.Builder
+
+	builder.WriteString("package sequences\n\n")
+	builder.WriteString("import (\n")
+	builder.WriteString("\tactions \"tester/Actions\"\n")
+	builder.WriteString(")\n\n")
+	builder.WriteString("var Sequence_Config = map[string][]SequenceAction{\n")
+
+	for sequenceName, sequenceActions := range sequences {
+		builder.WriteString(fmt.Sprintf("\t%q: {\n", sequenceName))
+
+		for _, sequenceAction := range sequenceActions {
+			builder.WriteString("\t\t{\n")
+			builder.WriteString(fmt.Sprintf("\t\t\tAction_type: actions.ActionType(%q),\n", sequenceAction.Action_type))
+
+			if sequenceAction.HTTP_action != nil {
+				action := sequenceAction.HTTP_action
+
+				builder.WriteString("\t\t\tHTTP_action: &actions.Http_actions{\n")
+				builder.WriteString(fmt.Sprintf("\t\t\t\tName: %q,\n", action.Name))
+				builder.WriteString(fmt.Sprintf("\t\t\t\tPath: %q,\n", action.Path))
+				builder.WriteString(fmt.Sprintf("\t\t\t\tExecutor_type: %q,\n", action.Executor_type))
+				builder.WriteString(fmt.Sprintf("\t\t\t\tExecutor_function_name: %q,\n", action.Executor_function_name))
+				builder.WriteString("\t\t\t},\n")
+			}
+
+			if sequenceAction.WS_action != nil {
+				action := sequenceAction.WS_action
+
+				builder.WriteString("\t\t\tWS_action: &actions.WsAction{\n")
+				builder.WriteString(fmt.Sprintf("\t\t\t\tName: %q,\n", action.Name))
+				builder.WriteString(fmt.Sprintf("\t\t\t\tPath: %q,\n", action.Path))
+				builder.WriteString(fmt.Sprintf("\t\t\t\tExector_type: %q,\n", action.Exector_type))
+				builder.WriteString(fmt.Sprintf("\t\t\t\tExecutor_function_name: %q,\n", action.Executor_function_name))
+				builder.WriteString("\t\t\t},\n")
+			}
+
+			builder.WriteString("\t\t},\n")
+		}
+
+		builder.WriteString("\t},\n")
+	}
+
+	builder.WriteString("}\n")
+
+	err := os.WriteFile(config_file_path+"sequences_config.go", []byte(builder.String()), 0644)
+
 	if err != nil {
 		return err
 	}
-
-	entry := fmt.Sprintf("\t\"%s\": []string{},\n", sequenceName)
-
-	configCode := string(code)
-
-	insertPosition := strings.LastIndex(configCode, "}")
-	if insertPosition == -1 {
-		return fmt.Errorf("invalid sequences_config.go")
-	}
-
-	configCode = configCode[:insertPosition] + entry + configCode[insertPosition:]
-
-	err = os.WriteFile(configPath, []byte(configCode), 0644)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("Sequences config updated:", sequenceName)
 
 	return nil
 }
 
 
 
-func (this *Sequences_obj) AddActionToSequence(sequenceName string, action actions.Action) bool {
-	sequence, sequenceExists := this.Sequences[sequenceName]
+
+func (this *Sequences_obj) AddHTTPActionToSequence(sequenceName string, action actions.Http_actions) bool {
+	_, sequenceExists := this.Sequences[sequenceName]
 
 	if !sequenceExists {
 		fmt.Println("Sequence does not exist:", sequenceName)
 		return false
 	}
 
-	sequence.Actions_to_execute = append(sequence.Actions_to_execute, action)
-	this.Sequences[sequenceName] = sequence
+	this.Sequences[sequenceName] = append(this.Sequences[sequenceName], SequenceAction{
+		Action_type: actions.ActionTypeHTTP,
+		HTTP_action: &action,
+	})
 
-	err := this.UpdateSequenceConfig(sequenceName, action.Name)
+	this.Config[sequenceName] = append(this.Config[sequenceName], SequenceAction{
+		Action_type: actions.ActionTypeHTTP,
+		HTTP_action: &action,
+	})
+
+	err := CreateCodeSequenceConfig(this.Sequences)
+
 	if err != nil {
 		fmt.Println("Failed to update sequence config:", err)
 		return false
@@ -180,54 +184,47 @@ func (this *Sequences_obj) AddActionToSequence(sequenceName string, action actio
 	return true
 }
 
-func (this *Sequences_obj) UpdateSequenceConfig(sequenceName string, actionName string) error {
-	configPath := config_file_path + "/sequences_config.go"
+func (this *Sequences_obj) AddWSActionToSequence(sequenceName string, action actions.WsAction) bool {
+	_, sequenceExists := this.Sequences[sequenceName]
 
-	code, err := os.ReadFile(configPath)
+	if !sequenceExists {
+		fmt.Println("Sequence does not exist:", sequenceName)
+		return false
+	}
+
+	this.Sequences[sequenceName] = append(this.Sequences[sequenceName], SequenceAction{
+		Action_type: actions.ActionTypeWS,
+		WS_action:   &action,
+	})
+
+	this.Config[sequenceName] = append(this.Config[sequenceName], SequenceAction{
+		Action_type: actions.ActionTypeWS,
+		WS_action:   &action,
+	})
+
+	err := CreateCodeSequenceConfig(this.Sequences)
+
 	if err != nil {
-		return err
+		fmt.Println("Failed to update sequence config:", err)
+		return false
 	}
 
-	configCode := string(code)
-
-	this.Config[sequenceName] = append(this.Config[sequenceName], actionName)
-
-	var builder strings.Builder
-
-	builder.WriteString("var Sequence_Config = map[string][]string{\n")
-
-	for name, actionNames := range this.Config {
-		builder.WriteString(fmt.Sprintf("\t%q: {\n", name))
-
-		for _, actionName := range actionNames {
-			builder.WriteString(fmt.Sprintf("\t\t%q,\n", actionName))
-		}
-
-		builder.WriteString("\t},\n")
-	}
-
-	builder.WriteString("}\n")
-
-	varStart := strings.Index(configCode, "var Sequence_Config")
-	if varStart == -1 {
-		return fmt.Errorf("Sequence_Config not found")
-	}
-
-	newConfigCode := configCode[:varStart] + builder.String()
-
-	err = os.WriteFile(configPath, []byte(newConfigCode), 0644)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("Sequence config updated:", sequenceName, "->", actionName)
-
-	return nil
+	return true
 }
 
+func (this *Sequences_obj) AddActionToSequence(sequenceName string, action any) bool {
+	switch typedAction := action.(type) {
+	case actions.Http_actions:
+		return this.AddHTTPActionToSequence(sequenceName, typedAction)
 
+	case actions.WsAction:
+		return this.AddWSActionToSequence(sequenceName, typedAction)
 
-
+	default:
+		fmt.Println("Invalid action type")
+		return false
+	}
+}
 
 
 
@@ -239,52 +236,18 @@ func (this *Sequences_obj) DeleteSequence(sequenceName string) bool {
 		return false
 	}
 
-	err := this.DeleteSequenceConfig(sequenceName)
-	if err != nil {
-		fmt.Println("Failed to remove sequence from config:", err)
-		return false
-	}
-
 	delete(this.Sequences, sequenceName)
 	delete(this.Config, sequenceName)
+
+	err := CreateCodeSequenceConfig(this.Sequences)
+
+	if err != nil {
+		fmt.Println("Failed to update sequences config:", err)
+		return false
+	}
 
 	fmt.Println("Sequence deleted:", sequenceName)
 
 	return true
 }
 
-func (this *Sequences_obj) DeleteSequenceConfig(sequenceName string) error {
-	configPath := config_file_path + "/sequences_config.go"
-
-	code, err := os.ReadFile(configPath)
-	if err != nil {
-		return err
-	}
-
-	configCode := string(code)
-
-	entry := fmt.Sprintf("\t%q: {\n", sequenceName)
-
-	start := strings.Index(configCode, entry)
-	if start == -1 {
-		return fmt.Errorf("sequence not found in config: %s", sequenceName)
-	}
-
-	end := strings.Index(configCode[start:], "\t},")
-	if end == -1 {
-		return fmt.Errorf("invalid sequence config entry: %s", sequenceName)
-	}
-
-	end = start + end + len("\t},")
-
-	configCode = configCode[:start] + configCode[end:]
-
-	err = os.WriteFile(configPath, []byte(configCode), 0644)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("Sequence removed from config:", sequenceName)
-
-	return nil
-}

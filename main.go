@@ -17,7 +17,7 @@ func main() {
 	var actions = Actions.CreateActionsObj()
 
 	fmt.Println("========== Actions Setup START ==========")
-	actions.SetupActions()
+	actions.SetUpActionsObj()
 	fmt.Printf("========== Actions Setup End ==========\n\n\n\n\n")
 
 	var sequences=sequences.CreateSequencesObj()
