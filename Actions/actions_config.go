@@ -13,5 +13,4 @@ func asd(){
 
 var ActionsConfig = map[string]func(*http.Client, *data.ActionResponse, *data.SequnceState) *data.ActionResponse{
 	
-	"as": data_actions.StartAction_as,
 }

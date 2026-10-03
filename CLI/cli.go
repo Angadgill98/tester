@@ -121,7 +121,7 @@ func (cli *CLI) ProcessCreate(input string) {
 		}
 
 		for {
-			fmt.Print("Enter action type (http/..) or 'exit': ")
+			fmt.Print("Enter action type (http/ws/.. or 'exit': ")
 
 			if !scanner.Scan() {
 				return
@@ -140,11 +140,39 @@ func (cli *CLI) ProcessCreate(input string) {
 			fmt.Println("Invalid action type. Please try again.")
 		}
 
-		
+		opts := Actions.Action_opts{}
 
-		opts := Actions.Action_opts{
-			Action_type: actionType,
+		if actionType == "ws" {
+			opts.Action_type=Actions.ActionTypeWS
+			opts.WS = &Actions.WS_opts{}
+			validWSEvents := map[string]bool{
+				"connect": true,
+				"send":    true,
+				"receive": true,
+			}
+
+			for {
+				fmt.Print("Enter WebSocket event (connect/send/receive): ")
+
+				if !scanner.Scan() {
+					return
+				}
+
+				wsEvent := strings.TrimSpace(scanner.Text())
+
+				if validWSEvents[wsEvent] {
+					opts.WS.Event = wsEvent
+					break
+				}
+
+				fmt.Println("Invalid WebSocket event. Please try again.")
+			}
+		}else{
+			opts.Action_type=Actions.ActionTypeHTTP
 		}
+			
+
+		
 
 		created := cli.actions.CreateAction(actionName, opts)
 

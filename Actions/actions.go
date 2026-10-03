@@ -14,12 +14,14 @@ import (
 type Actions_obj struct{
 	Actions map[string]Action
 	Config map[string]func(*http.Client, *data.ActionResponse, *data.SequnceState) *data.ActionResponse
+	WS_congif  map[string]map[string]any
 }
 
 func CreateActionsObj() Actions_obj {
 	return Actions_obj{
 		Actions: make(map[string]Action),
 		Config:  ActionsConfig,
+		WS_congif: WSConfig,
 	}
 }
 
@@ -61,25 +63,25 @@ func (this *Actions_obj) SetupActions() {
 
 
 
-func (this *Actions_obj) CheckActionsFS() (bool,error) {
+func (this *Actions_obj) CheckActionsFS() (bool, error) {
 	_, err := os.Stat(ActionFS_path)
 
 	if err != nil {
 		if os.IsNotExist(err) {
 			fmt.Println("Directory doesn't exist")
-			return false,err
+			return false, err
 		}
 
 		if os.IsPermission(err) {
 			fmt.Println("Permission denied")
-			return false,err
+			return false, err
 		}
 
 		fmt.Println("Other error:", err)
-		return false,err
+		return false, err
 	}
 
-	_, err = os.Stat("Actions/"+"actions_config.go")
+	_, err = os.Stat("Actions/" + "actions_config.go")
 	if err != nil {
 		if os.IsNotExist(err) {
 			fmt.Println("actions_config doesn't exist")
@@ -88,6 +90,40 @@ func (this *Actions_obj) CheckActionsFS() (bool,error) {
 
 		if os.IsPermission(err) {
 			fmt.Println("Permission denied for actions_config")
+			return false, err
+		}
+
+		fmt.Println("Other error:", err)
+		return false, err
+	}
+
+	wsPath := ActionFS_path + "ws"
+
+	_, err = os.Stat(wsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("WebSocket actions directory doesn't exist")
+			return false, err
+		}
+
+		if os.IsPermission(err) {
+			fmt.Println("Permission denied for WebSocket actions directory")
+			return false, err
+		}
+
+		fmt.Println("Other error:", err)
+		return false, err
+	}
+
+	_, err = os.Stat("Actions/" + "actions_ws_config.go")
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("actions_ws_config doesn't exist")
+			return false, err
+		}
+
+		if os.IsPermission(err) {
+			fmt.Println("Permission denied for actions_ws_config")
 			return false, err
 		}
 
@@ -141,9 +177,27 @@ type Action struct{
 	Executor func(*http.Client, *data.ActionResponse, *data.SequnceState) *data.ActionResponse
 
 }
+type ActionType string
 
-type Action_opts struct{
-	Action_type string
+const (
+	ActionTypeHTTP ActionType = "http"
+	ActionTypeWS   ActionType = "ws"
+)
+
+type HTTP_opts struct {
+	Method string
+	URL    string
+}
+
+type WS_opts struct {
+	URL   string
+	Event string
+}
+
+type Action_opts struct {
+	Action_type ActionType
+	HTTP        *HTTP_opts
+	WS          *WS_opts
 }
 
 func (this *Actions_obj) CreateAction(action_name string,opts Action_opts) bool {
@@ -152,14 +206,15 @@ func (this *Actions_obj) CreateAction(action_name string,opts Action_opts) bool 
 		return false
 	}
 
-	action := Action{
-		Name: action_name,
-		Path: fmt.Sprintf("%v", ActionFS_path),
-		Executor: nil,
-	}
+	
 
 	switch opts.Action_type {
 	case "http":
+		action := Action{
+			Name: action_name,
+			Path: fmt.Sprintf("%v", ActionFS_path),
+			Executor: nil,
+		}
 		fmt.Println("Creating HTTP action")
 
 		fmt.Println("Setitng up HTTP Action File")
@@ -172,13 +227,31 @@ func (this *Actions_obj) CreateAction(action_name string,opts Action_opts) bool 
 		}
 
 	case "ws":
-		fmt.Println("Creating WS action")
+		fmt.Printf("Creating WS action with event %v \n", opts.WS.Event)
+		action := Action{
+			Name: action_name,
+			Path: fmt.Sprintf("%vws/", ActionFS_path),
+			Executor: nil,
+		}
 
-		fmt.Println("Setitng up WS Action File")
-		action.CreateWsFile();
+		switch opts.WS.Event {
+			case "connect":
+				fmt.Println("Creating WS connect action")
+				action.CreateWsConnectFile()
+
+			case "send":
+				fmt.Println("Creating WS send action")
+				action.CreateWsSendFile()
+
+			case "receive":
+				fmt.Println("Creating WS receive action")
+				action.CreateWsReceiveFile()
+
+			default:
+				fmt.Println("Invalid WS event")
+			}
+
 		
-
-	
 	default:
 		fmt.Println("Invalid action type:", opts.Action_type)
 		return false
@@ -404,38 +477,17 @@ func (this *Actions_obj) DeleteConfig(actionName string) error {
 
 
 
-func (this *Action) CreateWsFile() {
+func (this *Action) CreateWsConnectFile() {
 	code := `
-package data_actions
+package data_ws_actions
 
 import (
-	"fmt"
-
 	"github.com/gorilla/websocket"
 	"tester/data"
 )
 
 func StartAction_Action_name(url string) (*websocket.Conn, error) {
-	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
-	if err != nil {
-		return nil, err
-	}
 
-	return conn, nil
-}
-
-func HandleAction_Action_name(conn *websocket.Conn, prevReq *data.ActionResponse, sequnces *data.SequnceState) *data.ActionResponse {
-	_, message, err := conn.ReadMessage()
-	if err != nil {
-		fmt.Println("Failed to receive WebSocket message:", err)
-		return &data.ActionResponse{}
-	}
-
-	return &data.ActionResponse{
-		Body:   string(message),
-		Status: "received",
-		Data:   make(map[string]any),
-	}
 }
 `
 
@@ -443,9 +495,59 @@ func HandleAction_Action_name(conn *websocket.Conn, prevReq *data.ActionResponse
 
 	err := os.WriteFile(this.Path+this.Name+".go", []byte(code), 0644)
 	if err != nil {
-		fmt.Println("Error creating WebSocket action file:", err)
+		fmt.Println("Error creating WebSocket connect action file:", err)
 		return
 	}
 
-	fmt.Println("WebSocket action file created:", this.Path)
+	fmt.Println("WebSocket connect action file created:", this.Path)
+}
+
+func (this *Action) CreateWsSendFile() {
+	code := `
+package data_ws_actions
+
+import (
+	"github.com/gorilla/websocket"
+	"tester/data"
+)
+
+func WS_send_Action_name(conn *websocket.Conn, prevReq *data.ActionResponse, sequnces *data.SequnceState) *data.ActionResponse {
+
+}
+`
+
+	code = strings.ReplaceAll(code, "Action_name", this.Name)
+
+	err := os.WriteFile(this.Path+this.Name+".go", []byte(code), 0644)
+	if err != nil {
+		fmt.Println("Error creating WebSocket send action file:", err)
+		return
+	}
+
+	fmt.Println("WebSocket send action file created:", this.Path)
+}
+
+func (this *Action) CreateWsReceiveFile() {
+	code := `
+package data_ws_actions
+
+import (
+	"github.com/gorilla/websocket"
+	"tester/data"
+)
+
+func WS_handle_Action_name(conn *websocket.Conn, prevReq *data.ActionResponse, sequnces *data.SequnceState) *data.ActionResponse {
+
+}
+`
+
+	code = strings.ReplaceAll(code, "Action_name", this.Name)
+
+	err := os.WriteFile(this.Path+this.Name+".go", []byte(code), 0644)
+	if err != nil {
+		fmt.Println("Error creating WebSocket receive action file:", err)
+		return
+	}
+
+	fmt.Println("WebSocket receive action file created:", this.Path)
 }

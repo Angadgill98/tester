@@ -80,6 +80,18 @@ var MockExecutor = true
 
 	fmt.Println("Temporary action file created successfully")
 
+
+	wsPath := actionsPath + "/ws"
+
+	err = os.MkdirAll(wsPath, 0755)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("WebSocket actions directory setup successfully")
+
+
+
 	return nil
 }
 
