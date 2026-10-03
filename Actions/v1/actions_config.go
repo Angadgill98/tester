@@ -1,16 +1,16 @@
-package actions
+package actions_v1
 
-import (
-	"net/http"
-	"tester/data"
-	data_actions "tester/data/actions"
-)
+// import (
+// 	"net/http"
+// 	"tester/data"
+// 	data_actions "tester/data/actions"
+// )
 
-func asd(){
-	if data_actions.MockExecutor{}
-}
+// func asd(){
+// 	if data_actions.MockExecutor{}
+// }
 			
 
-var ActionsConfig = map[string]func(*http.Client, *data.ActionResponse, *data.SequnceState) *data.ActionResponse{
+// var ActionsConfig = map[string]func(*http.Client, *data.ActionResponse, *data.SequnceState) *data.ActionResponse{
 	
-}
+// }

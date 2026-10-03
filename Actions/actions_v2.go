@@ -38,18 +38,15 @@ var Http_executor_types = []string{
 type Executor_function_signature any
 
 func CreateActionsObj() Actions_obj {
+	
 	return Actions_obj{
 		Http: HTTP_Actions_obj{
 			Http_actions: make(map[string]Http_actions),
-			Config: map[string]map[string]Executor_function_signature{
-				"http": make(map[string]Executor_function_signature),
-			},
+			Config:ActionsConfig,
 		},
 		WS: WS_Actions_obj{
 			WS_actions: make(map[string]WsAction),
-			Config: map[string]map[string]Executor_function_signature{
-				"ws": make(map[string]Executor_function_signature),
-			},
+			Config:ActionsConfig,
 		},
 	}
 }
@@ -80,16 +77,43 @@ func (this *Actions_obj) SetUpActionsObj() {
 
 	for _, action := range actions {
 		this.Http.Http_actions[action.Name] = action
-		
 	}
 
 	fmt.Printf("Loaded %d actions for http\n", len(actions))
 
+	isok, err = this.CheckWsActionsFS()
+
+	if err != nil {
+		return
+	}
+
+	if !isok {
+		fmt.Println("WebSocket Actions FS not Setup")
+		return
+	}
+
+	if isok {
+		fmt.Println("WebSocket Actions FS Setup OK")
+	}
+
+	fmt.Println("Getting WebSocket Actions files")
+
+	wsActions, err := this.ReadWsActionsFiles()
+	if err != nil {
+		fmt.Println("Failed to read WebSocket Actions files:", err)
+		return
+	}
+
+	for _, action := range wsActions {
+		this.WS.WS_actions[action.Name] = action
+	}
+
+	fmt.Printf("Loaded %d actions for ws\n", len(wsActions))
+}
 
 
-}	
 
-var Actions_data_fs="data"
+var Actions_data_fs="data/actions"
 var Http_Actions_fs_path=Actions_data_fs+"/http"
 func (this *Actions_obj) CheckHttpActionsFS() (bool, error) {
 	_, err := os.Stat(Http_Actions_fs_path)
@@ -117,7 +141,7 @@ func (this *Actions_obj) ReadHttpActionsFiles() ([]Http_actions, error) {
 	var actionsList []Http_actions
 
 	for _, executorType := range Http_executor_types {
-		reading_path := Http_Actions_fs_path + executorType
+		reading_path := Http_Actions_fs_path +"/"+ executorType
 
 		entries, err := os.ReadDir(reading_path)
 		if err != nil {
@@ -128,9 +152,9 @@ func (this *Actions_obj) ReadHttpActionsFiles() ([]Http_actions, error) {
 			if entry.IsDir() {
 				continue
 			}
-			// if entry.Name() == "tmp.go" {
-			// 	continue
-			// }
+			if entry.Name() == "tmp.go" {
+				continue
+			}
 
 			actionName := strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
 
@@ -158,9 +182,9 @@ type WS_Actions_obj struct {
 }
 
 var Ws_executor_types = []string{
-	"Send",
-	"Connect",
-	"Recieve",
+	"send",
+	"connect",
+	"recieve",
 }
 type WsAction struct {
 	Name string
@@ -195,7 +219,7 @@ func (this *Actions_obj) ReadWsActionsFiles() ([]WsAction, error) {
 	var actionsList []WsAction
 
 	for _, executorType := range Ws_executor_types {
-		reading_path := Ws_Actions_fs_path + executorType
+		reading_path := Ws_Actions_fs_path + "/"+executorType
 
 		entries, err := os.ReadDir(reading_path)
 		if err != nil {
@@ -207,13 +231,17 @@ func (this *Actions_obj) ReadWsActionsFiles() ([]WsAction, error) {
 				continue
 			}
 
+			if entry.Name() == "tmp.go" {
+				continue
+			}
+
 			actionName := strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
 
 			action := WsAction{
 				Name:          actionName,
 				Path:          reading_path,
 				Exector_type:  executorType,
-				Executor_function_name:      "",
+				Executor_function_name:    "StartAction_"+actionName  ,
 			}
 
 			fmt.Printf("Founded Executor Type: %s | Action Name: %s\n for ws", action.Exector_type, action.Name)
@@ -224,7 +252,6 @@ func (this *Actions_obj) ReadWsActionsFiles() ([]WsAction, error) {
 
 	return actionsList, nil
 }
-
 
 
 
@@ -314,13 +341,16 @@ func (this *Actions_obj) CreateAction(action_name string, action_opts Action_opt
 		}
 
 		switch wsOpts.Executor_type {
-		case "Send":
+		case "send":
+			wsAction.Path=Ws_Actions_fs_path+"/send/"
 			wsAction.CreateWsSendFile()
 
-		case "Connect":
+		case "connect":
+			wsAction.Path=Ws_Actions_fs_path+"/connect/"
 			wsAction.CreateWsConnectFile()
 
-		case "Recieve":
+		case "recieve":
+			wsAction.Path=Ws_Actions_fs_path+"/req/"
 			wsAction.CreateWsReceiveFile()
 
 		default:
@@ -328,7 +358,8 @@ func (this *Actions_obj) CreateAction(action_name string, action_opts Action_opt
 			return false
 		}
 
-		
+
+		wsAction.Name="StartAction_"+action_name
 
 		this.WS.WS_actions[action_name] = wsAction
 		this.WS.Config["ws"][action_name] = nil
@@ -374,7 +405,7 @@ func ValidWS_exec_type(wsOpts WS_opts)bool{
 
 
 func (this *Http_actions)CreateHttpAction(){
-	var action_file_name=Http_Actions_fs_path+"/"+this.Executor_type+this.Name
+	var action_file_name=Http_Actions_fs_path+"/"+this.Executor_type+"/"+this.Name
 	this.Path=action_file_name
 	switch this.Executor_type {
 	case "req":
@@ -388,7 +419,7 @@ func (this *Http_actions)CreateHttpAction(){
 
 func (this *Http_actions) SetUpHttpActionFile_req_type() {
 	code := `
-	package data_actions
+	package http_req
 
 	import (
 		"bytes"
@@ -468,7 +499,7 @@ func (this *Http_actions) SetUpHttpActionFile_req_type() {
 
 	code = strings.ReplaceAll(code, "Action_name", this.Name)
 	
-	err := os.WriteFile(this.Path+this.Name+".go", []byte(code), 0644)
+	err := os.WriteFile(this.Path+".go", []byte(code), 0644)
 	if err != nil {
 		fmt.Println("Error creating action file:", err)
 		return
@@ -521,7 +552,7 @@ func (this *HTTP_Actions_obj) CreateCodeHTTPobject() {
 	var code string
 
 	for actionName, action := range this.Http_actions {
-		code += fmt.Sprintf("\t\"%s\": %s,\n", actionName, action.Executor_function_name)
+		code += fmt.Sprintf("\t\"%s\": %s,\n", actionName, "http_req."+action.Executor_function_name)
 	}
 
 	UpdateConfigFile("http",code)
@@ -532,12 +563,22 @@ func (this *WS_Actions_obj) CreateCodeWSobject() {
 	var code string
 
 	for actionName, action := range this.WS_actions {
-		code += fmt.Sprintf("\t\"%s\": %s,\n", actionName, action.Executor_function_name)
+		var packageName string
+
+		switch action.Exector_type {
+		case "send":
+			packageName = "ws_actions_send"
+		case "connect":
+			packageName = "ws_actions_connect"
+		case "recieve":
+			packageName = "ws_actions_receive"
+		}
+
+		code += fmt.Sprintf("\t\"%s\": %s.%s,\n", actionName, packageName, action.Executor_function_name)
 	}
 
-	UpdateConfigFile("ws",code)
+	UpdateConfigFile("ws", code)
 }
-
 
 func (this *Actions_obj) DeleteHttpAction(actionName string) bool {
 	action, exists := this.Http.Http_actions[actionName]
@@ -547,11 +588,16 @@ func (this *Actions_obj) DeleteHttpAction(actionName string) bool {
 		return false
 	}
 
-	err := action.DeleteActionFile()
+	filePath := action.Path+"/" + action.Name + ".go"
+
+
+	err := os.Remove(filePath)
 	if err != nil {
-		fmt.Println("Failed to delete action file:", err)
+		fmt.Println("Error while delting action file", err)
 		return false
 	}
+
+	fmt.Println("Action file deleted:", filePath)
 
 	delete(this.Http.Http_actions, actionName)
 	delete(this.Http.Config["http"], actionName)
@@ -569,9 +615,12 @@ func (this *Actions_obj) DeleteWsAction(actionName string) bool {
 		return false
 	}
 
-	err := action.DeleteActionFile()
+	filePath := action.Path+"/" + action.Name + ".go"
+
+
+	err := os.Remove(filePath)
 	if err != nil {
-		fmt.Println("Failed to delete action file:", err)
+		fmt.Println("Error while delting action file", err)
 		return false
 	}
 
@@ -583,31 +632,6 @@ func (this *Actions_obj) DeleteWsAction(actionName string) bool {
 	return true
 }
 
-func (this *Http_actions) DeleteActionFile() error {
-	filePath := this.Path + this.Name + ".go"
-
-	err := os.Remove(filePath)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("Action file deleted:", filePath)
-
-	return nil
-}
-
-func (this *WsAction) DeleteActionFile() error {
-	filePath := this.Path + this.Name + ".go"
-
-	err := os.Remove(filePath)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("Action file deleted:", filePath)
-
-	return nil
-}
 
 
 
@@ -615,7 +639,7 @@ func (this *WsAction) DeleteActionFile() error {
 
 func (this *WsAction) CreateWsConnectFile() {
 	code := `
-package data_ws_actions
+package ws_actions_connect
 
 import (
 	"github.com/gorilla/websocket"
@@ -641,14 +665,14 @@ func StartAction_Action_name(url string) (*websocket.Conn, error) {
 
 func (this *WsAction) CreateWsSendFile() {
 	code := `
-package data_ws_actions
+package ws_actions_send
 
 import (
 	"github.com/gorilla/websocket"
 	"tester/data"
 )
 
-func WS_send_Action_name(conn *websocket.Conn, prevReq *data.ActionResponse, sequnces *data.SequnceState) *data.ActionResponse {
+func StartAction_Action_name(conn *websocket.Conn, prevReq *data.ActionResponse, sequnces *data.SequnceState) *data.ActionResponse {
 
 	return nil
 }
@@ -669,14 +693,14 @@ func WS_send_Action_name(conn *websocket.Conn, prevReq *data.ActionResponse, seq
 
 func (this *WsAction) CreateWsReceiveFile() {
 	code := `
-package data_ws_actions
+package ws_actions_receive
 
 import (
 	"github.com/gorilla/websocket"
 	"tester/data"
 )
 
-func WS_handle_Action_name(conn *websocket.Conn, prevReq *data.ActionResponse, sequnces *data.SequnceState) *data.ActionResponse {
+func StartAction_Action_name(conn *websocket.Conn, prevReq *data.ActionResponse, sequnces *data.SequnceState) *data.ActionResponse {
 
 	return nil
 }

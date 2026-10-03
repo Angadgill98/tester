@@ -66,21 +66,6 @@ func (fs *File_system) SetupActionFiles() error {
 
 	fmt.Println("Actions directory setup successfully")
 
-	tmpFilePath := actionsPath + "/tmp.go"
-
-	code := `package data_actions
-
-var MockExecutor = true
-`
-
-	err = os.WriteFile(tmpFilePath, []byte(code), 0644)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("Temporary action file created successfully")
-
-
 	wsPath := actionsPath + "/ws"
 
 	err = os.MkdirAll(wsPath, 0755)
@@ -90,11 +75,92 @@ var MockExecutor = true
 
 	fmt.Println("WebSocket actions directory setup successfully")
 
+	sendPath := wsPath + "/send"
 
+	err = os.MkdirAll(sendPath, 0755)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("WebSocket actions directory setup successfully")
+
+	conPath := wsPath + "/connect"
+
+	err = os.MkdirAll(conPath, 0755)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("WebSocket actions directory setup successfully")
+
+	recPath := wsPath + "/recieve"
+
+	err = os.MkdirAll(recPath, 0755)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("WebSocket actions directory setup successfully")
+
+	httpPath := actionsPath + "/http"
+
+	err = os.MkdirAll(httpPath, 0755)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("http directory setup successfully")
+
+	reqTypePath := httpPath + "/req"
+
+	err = os.MkdirAll(reqTypePath, 0755)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("req directory setup successfully")
+
+	err = createTmpGoFile(reqTypePath, "http_req")
+	if err != nil {
+		return err
+	}
+
+	err = createTmpGoFile(sendPath, "ws_actions_send")
+	if err != nil {
+		return err
+	}
+
+	err = createTmpGoFile(conPath, "ws_actions_connect")
+	if err != nil {
+		return err
+	}
+
+	err = createTmpGoFile(recPath, "ws_actions_receive")
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
+func createTmpGoFile(path string, packageName string) error {
+	tmpPath := path + "/tmp.go"
 
+	code := fmt.Sprintf(`package %s
+
+func MockFunction() {
+}
+`, packageName)
+
+	err := os.WriteFile(tmpPath, []byte(code), 0644)
+	if err != nil {
+		fmt.Println("Error creating tmp.go:", err)
+		return err
+	}
+
+	fmt.Println("Created:", tmpPath)
+
+	return nil
+}
 func (fs *File_system) SetUpSequnceFiles() error {
 	sequencesPath := file_path + "/sequences"
 

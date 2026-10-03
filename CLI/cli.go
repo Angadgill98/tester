@@ -148,9 +148,9 @@ func (cli *CLI) ProcessCreate(input string) {
 			opts.Action_type = Actions.ActionTypeWS
 
 			validWSEvents := map[string]bool{
-				"Send":    true,
-				"Connect": true,
-				"Recieve": true,
+				"send":    true,
+				"connect": true,
+				"recieve": true,
 			}
 
 			var wsEvent string

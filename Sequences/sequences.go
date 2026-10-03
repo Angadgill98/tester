@@ -82,7 +82,7 @@ func (this *Sequences_obj) CreateSequence(sequenceName string) bool {
 	}
 
 	this.Sequences[sequenceName] = []SequenceAction{}
-	this.Config[sequenceName] = []SequenceAction{}
+	// this.Config[sequenceName] = []SequenceAction{}
 
 	err := CreateCodeSequenceConfig(this.Sequences)
 
@@ -169,10 +169,10 @@ func (this *Sequences_obj) AddHTTPActionToSequence(sequenceName string, action a
 		HTTP_action: &action,
 	})
 
-	this.Config[sequenceName] = append(this.Config[sequenceName], SequenceAction{
-		Action_type: actions.ActionTypeHTTP,
-		HTTP_action: &action,
-	})
+	// this.Config[sequenceName] = append(this.Config[sequenceName], SequenceAction{
+	// 	Action_type: actions.ActionTypeHTTP,
+	// 	HTTP_action: &action,
+	// })
 
 	err := CreateCodeSequenceConfig(this.Sequences)
 
@@ -197,10 +197,10 @@ func (this *Sequences_obj) AddWSActionToSequence(sequenceName string, action act
 		WS_action:   &action,
 	})
 
-	this.Config[sequenceName] = append(this.Config[sequenceName], SequenceAction{
-		Action_type: actions.ActionTypeWS,
-		WS_action:   &action,
-	})
+	// this.Config[sequenceName] = append(this.Config[sequenceName], SequenceAction{
+	// 	Action_type: actions.ActionTypeWS,
+	// 	WS_action:   &action,
+	// })
 
 	err := CreateCodeSequenceConfig(this.Sequences)
 
