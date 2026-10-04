@@ -350,7 +350,7 @@ func (this *Actions_obj) CreateAction(action_name string, action_opts Action_opt
 			wsAction.CreateWsConnectFile()
 
 		case "recieve":
-			wsAction.Path=Ws_Actions_fs_path+"/req/"
+			wsAction.Path=Ws_Actions_fs_path+"/recieve/"
 			wsAction.CreateWsReceiveFile()
 
 		default:
@@ -645,8 +645,15 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func StartAction_Action_name(url string) (*websocket.Conn, error) {
-	return nil, nil
+func StartAction_con2() (*websocket.Conn, error) {
+	url := ""
+
+	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
 }
 `
 
@@ -686,7 +693,7 @@ func StartAction_Action_name(conn *websocket.Conn, prevReq *data.ActionResponse,
 		return
 	}
 
-	this.Executor_function_name = "WS_send_" + this.Name
+	this.Executor_function_name = "StartAction_" + this.Name
 
 	fmt.Println("WebSocket send action file created:", this.Path+this.Name+".go")
 }
@@ -714,7 +721,7 @@ func StartAction_Action_name(conn *websocket.Conn, prevReq *data.ActionResponse,
 		return
 	}
 
-	this.Executor_function_name = "WS_handle_" + this.Name
+	this.Executor_function_name = "StartAction_" + this.Name
 
 	fmt.Println("WebSocket receive action file created:", this.Path+this.Name+".go")
 }

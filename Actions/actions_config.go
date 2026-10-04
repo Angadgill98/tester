@@ -22,9 +22,10 @@ ws_actions_receive.MockFunction()
 
 var ActionsConfig = map[string]map[string]Executor_function_signature{
 	"http": {
-	"asd": http_req.StartAction_asd,
 	},
 	"ws": {
-	"asd": ws_actions_send.WS_send_asd,
+	"send": ws_actions_send.StartAction_send,
+	"rev": ws_actions_receive.StartAction_rev,
+	"con2": ws_actions_connect.StartAction_con2,
 	},
 }

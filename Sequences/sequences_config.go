@@ -7,21 +7,30 @@ import (
 var Sequence_Config = map[string][]SequenceAction{
 	"asd": {
 		{
-			Action_type: actions.ActionType("http"),
-			HTTP_action: &actions.Http_actions{
-				Name: "asd",
-				Path: "data/actions/http/req",
-				Executor_type: "req",
-				Executor_function_name: "StartAction_asd",
+			Action_type: actions.ActionType("ws"),
+			WS_action: &actions.WsAction{
+				Name: "StartAction_rev",
+				Path: "data/actions/ws/recieve/",
+				Exector_type: "recieve",
+				Executor_function_name: "StartAction_rev",
 			},
 		},
 		{
 			Action_type: actions.ActionType("ws"),
 			WS_action: &actions.WsAction{
-				Name: "asd",
-				Path: "data/actions/ws/send",
+				Name: "StartAction_send",
+				Path: "data/actions/ws/send/",
 				Exector_type: "send",
-				Executor_function_name: "StartAction_asd",
+				Executor_function_name: "StartAction_send",
+			},
+		},
+		{
+			Action_type: actions.ActionType("ws"),
+			WS_action: &actions.WsAction{
+				Name: "StartAction_con2",
+				Path: "data/actions/ws/connect/",
+				Exector_type: "connect",
+				Executor_function_name: "StartAction_con2",
 			},
 		},
 	},
