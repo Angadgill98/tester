@@ -3,6 +3,7 @@ package tester
 import (
 	"fmt"
 	"net/http"
+	"net/http/cookiejar"
 
 	"github.com/gorilla/websocket"
 
@@ -19,8 +20,15 @@ type Tester struct {
 }
 
 func CreateTesterObj() Tester {
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		panic(err)
+	}
+
 	return Tester{
-		Client:    http.Client{},
+		Client: http.Client{
+			Jar: jar,
+		},
 		WebSocket: nil,
 		Prev_res:  data.ActionResponse{},
 		Sequence_state: data.SequnceState{

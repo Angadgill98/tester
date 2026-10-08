@@ -526,7 +526,7 @@ func (cli *CLI) ProcessExecute(input string) {
 	case "action":
 		fmt.Println("Starting Temp Sequence")
 
-		actionTester := tester.CreateTesterObj()
+		tester := tester.CreateTesterObj()
 		counter := 0
 
 		for {
@@ -611,24 +611,24 @@ func (cli *CLI) ProcessExecute(input string) {
 			case Actions.Http_actions:
 				fmt.Println("HTTP action selected:", action.Name)
 
-				/*
-					Your current Tester.ExecuteAction accepts
-					the old action structure.
+				var res = tester.ExecuteHTTPAction(*cli.actions, action)
 
-					This section should be updated when Tester
-					is changed to accept Http_actions/WsAction.
-				*/
+				fmt.Println("HTTP response received for action:", action.Name)
+				fmt.Println("Status Code:", res.StatusCode)
+				fmt.Println("Status:", res.Status)
+				fmt.Println("Headers:", res.Headers)
+				fmt.Println("Cookies:", res.Cookies)
+				fmt.Println("Body:", res.Body)
 
-				fmt.Println("HTTP execution selected:", action.Name)
-
+				tester.Prev_res = *res
+				tester.Sequence_state.State[action.Name] = *res
+				
 			case Actions.WsAction:
 				fmt.Println("WS action selected:", action.Name)
 				fmt.Println("WebSocket execution is not implemented yet.")
 			}
 
 			counter++
-			_ = actionTester
-			_ = counter
 		}
 
 	case "sequence":

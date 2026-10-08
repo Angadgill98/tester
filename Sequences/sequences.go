@@ -251,3 +251,6 @@ func (this *Sequences_obj) DeleteSequence(sequenceName string) bool {
 	return true
 }
 
+
+
+
