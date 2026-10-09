@@ -22,7 +22,7 @@ func (this *Ws_Action_obj)CreateAction(global_name string,action_name string, ac
 	httpOpts, ok := action_opts.Opts.(HTTP_opts)
 	if !ok {
 		fmt.Println("Invalid HTTP options")
-		return nil
+		return WsAction{}
 	}
 
 	var ws_action = WsAction{

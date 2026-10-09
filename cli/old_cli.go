@@ -25,18 +25,18 @@ package main
 // }
 
 // func (cli *CLI) Init() {
-// 	fmt.Println("========== CLI START ==========")
-// 	fmt.Println("Available commands:")
-// 	fmt.Println("  create action <action_name>")
-// 	fmt.Println("  create sequence <sequence_name>")
-// 	fmt.Println("  delete action <action_name>")
-// 	fmt.Println("  delete sequence <sequence_name>")
-// 	fmt.Println("  sequence add-action <sequence_name>")
-// 	fmt.Println("  execute action")
-// 	fmt.Println("  execute sequence <sequence_name>")
-// 	fmt.Println("  show")
-// 	fmt.Println("  exit")
-// 	fmt.Println()
+	// fmt.Println("========== CLI START ==========")
+	// fmt.Println("Available commands:")
+	// fmt.Println("  create action <action_name>")
+	// fmt.Println("  create sequence <sequence_name>")
+	// fmt.Println("  delete action <action_name>")
+	// fmt.Println("  delete sequence <sequence_name>")
+	// fmt.Println("  sequence add-action <sequence_name>")
+	// fmt.Println("  execute action")
+	// fmt.Println("  execute sequence <sequence_name>")
+	// fmt.Println("  show")
+	// fmt.Println("  exit")
+	// fmt.Println()
 
 // 	scanner := bufio.NewScanner(os.Stdin)
 

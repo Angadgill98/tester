@@ -15,19 +15,17 @@ import (
 
 type Engine struct {
 	
-	Application *Application.Application
-	Http_actions *Actions.HttpActionsConfig
-	Ws_action *Actions.WsActionsConfig
-	Sequences *Sequences.SequenceConfig
+	ApplicationObj *Application.Application_obj
+	ActionsObj *Actions.Actions_obj
+	SequencesObj *Sequences.SequenceObj
 }
 
 
-func CreateEngine(application *Application.Application, httpActions *Actions.HttpActionsConfig, wsActions *Actions.WsActionsConfig, sequences *Sequences.SequenceConfig) Engine {
+func CreateEngine(applicationObj *Application.Application_obj,actions_obj *Actions.Actions_obj, sequences *Sequences.SequenceObj) Engine {
 	return Engine{
-		Application:   application,
-		Http_actions: httpActions,
-		Ws_action:    wsActions,
-		Sequences:    sequences,
+		ApplicationObj:   applicationObj,
+		ActionsObj: actions_obj,
+		SequencesObj:    sequences,
 	}
 }
 
@@ -42,12 +40,12 @@ func (engine *Engine) CreateApp(appName string, path string) {
 		return
 	}
 
-	application := Application.CreateApplication(appName)
+	application := engine.ApplicationObj.CreateApplication(appName)
 	currentApp.Children[appName] = application
 }
 
 func (engine *Engine) GetAppFromPath(path string) *Application.Application {
-	currentApp := engine.Application
+	currentApp := (*engine.ApplicationObj)["GLOBAL"]
 
 	for _, name := range engine.GetAppNamesFromPath(path) {
 		child, exists := currentApp.Children[name]
@@ -92,10 +90,9 @@ func (engine *Engine) CreateAction(appName string, path string, actionName strin
 			return
 		}
 
-		action := engine.Http_actions.CreateAction(global_actionName, actionName, opts)
+		action := engine.ActionsObj.Http.CreateAction(global_actionName, actionName, opts)
 		action.Opts = httpOpts
 		action.Path = actions_path
-		action.CreateHttpFile()
 
 	case "ws":
 		wsOpts, ok := opts.Opts.(Actions.WS_opts)
@@ -103,10 +100,9 @@ func (engine *Engine) CreateAction(appName string, path string, actionName strin
 			return
 		}
 
-		action := engine.Ws_action.CreateAction(global_actionName, actionName, opts)
+		action := engine.ActionsObj.Ws.CreateAction(global_actionName, actionName, opts)
 		action.Opts = wsOpts
 		action.Path = actions_path
-		action.CreateWsFile()
 	}
 
 

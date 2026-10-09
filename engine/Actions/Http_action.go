@@ -18,7 +18,7 @@ func (this *Http_Action_obj)CreateAction(global_name string,action_name string, 
 	httpOpts, ok := action_opts.Opts.(HTTP_opts)
 	if !ok {
 		fmt.Println("Invalid HTTP options")
-		return nil
+		return Http_action{}
 	}
 
 	var http_action = Http_action{
