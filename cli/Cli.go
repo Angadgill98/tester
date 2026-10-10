@@ -22,7 +22,7 @@ func CreateCLI(socket *net.Conn ) *CLI {
 }
 type Command struct {
 	Command string   `json:"command"`
-	Args    []string `json:"args"`
+	Args    []any `json:"args"`
 }
 
 
@@ -34,7 +34,7 @@ func (cli *CLI)StartCLILoop() {
 	scanner := bufio.NewScanner(os.Stdin)
 
 	for {
-		fmt.Printf("%s > ", strings.Join(global.AppPath, "/"))
+		fmt.Printf("%s > ", strings.Join(global.CurrentAppPath, "/"))
 
 		if !scanner.Scan() {
 			return
@@ -73,26 +73,11 @@ func (cli *CLI)HandleOperation(operation string, args []string) {
 		cli.ProcessLs(args)
 
 	case "pwd":
-		fmt.Println(strings.Join(global.AppPath, "/"))
+		fmt.Println(strings.Join(global.CurrentAppPath, "/"))
 
 	default:
 		fmt.Println("Unknown operation:", operation)
 	}
-}
-
-func CreateCommand(command string, args []string) []byte {
-	commandObj := Command{
-		Command: command,
-		Args:    args,
-	}
-
-	data, err := json.Marshal(commandObj)
-	if err != nil {
-		fmt.Println("Failed to serialize command:", err)
-		return nil
-	}
-
-	return data
 }
 
 func (cli *CLI)ProcessCreate(args []string) {
@@ -101,49 +86,125 @@ func (cli *CLI)ProcessCreate(args []string) {
 	}
 
 	switch args[0] {
-	case "app":
+		case "app":
+			if len(args) < 2 {
+				fmt.Println("CLI: Application name is missing")
+				return
+			}
+
+			appName := strings.TrimSpace(strings.ReplaceAll(strings.Join(args[1:], " "), " ", "_"))
+			currentAppID := global.CurrentAppID
+			payload := []any{"app",appName, currentAppID}
+
+			response := cli.SendPayload("create", payload)
+			if !response.Status {
+				fmt.Println(response.Msg)
+				return
+			}else{
+				fmt.Println(response.Msg)
+			}
+
+			for _, item := range response.Args {
+				fmt.Println(item)
+			}
+
+		case "action":
+			if len(args) < 2 {
+				fmt.Println("CLI: Action name is missing")
+				return
+			}
+
+			actionName := strings.TrimSpace(strings.ReplaceAll(strings.Join(args[1:], " "), " ", "_"))
+
+			var actionType string
+
+			for {
+				fmt.Print("Enter action type (http/ws, 0 to exit): ")
+
+				fmt.Scanln(&actionType)
+
+				if actionType == "0" {
+					return
+				}
+
+				actionType = strings.ToLower(strings.TrimSpace(actionType))
+
+				if actionType == "http" || actionType == "ws" {
+					break
+				}
+
+				fmt.Println("CLI: Invalid action type. Enter http, ws, or 0 to exit.")
+			}
+
+			var opts Actions_opts
+
+			switch strings.ToLower(actionType) {
+			case "http":
+				opts = Actions_opts{
+					Action_type: "http",
+					HTTP:        HTTP_opts{},
+				}
+
+			case "ws":
+				opts = Actions_opts{
+					Action_type: "ws",
+					WS:          WS_opts{},
+				}
+
+			default:
+				fmt.Println("CLI: Invalid action type. Use http or ws")
+				return
+			}
+
+			currentAppID := global.CurrentAppID
+			payload := []any{"action", actionName, currentAppID, opts}
+
+			response := cli.SendPayload("create", payload)
+			if !response.Status {
+				fmt.Println(response.Msg)
+				return
+			}
+
+			fmt.Println(response.Msg)
+
+			for _, item := range response.Args {
+				fmt.Println(item)
+			}
 		
-		response:=cli.SendPipeline("create",args)
+		case "sequence":
+			if len(args) < 2 {
+				fmt.Println("CLI: Sequence name is missing")
+				return
+			}
 
-		fmt.Println(response.Response)
+			sequenceName := strings.TrimSpace(strings.ReplaceAll(strings.Join(args[1:], " "), " ", "_"))
+			currentAppID := global.CurrentAppID
+			payload := []any{"sequence", sequenceName, currentAppID}
 
-	case "action":
-		response:=cli.SendPipeline("create",args)
-		
+			response := cli.SendPayload("create", payload)
+			if !response.Status {
+				fmt.Println(response.Msg)
+				return
+			}
 
-		fmt.Println(response.Response)
+			fmt.Println(response.Msg)
+
+			for _, item := range response.Args {
+				fmt.Println(item)
+			}
+
+		default:
+			fmt.Println("CLI: Invalid create command. Use app, action, or sequence.")
 
 	}
 }
 
 type Response struct {
-	Status   bool `json:"status"`
-	Response any  `json:"response"`
+	Status bool   `json:"status"`
+	Msg    string `json:"msg"`
+	Args   []any  `json:"args"`
 }
 
-func (cli *CLI)SendPipeline(com string,args []string)Response{
-	current_path := strings.Join(global.AppPath, "_")
-	payload := args[0:]
-	payload = append(payload, current_path)
-
-	command := CreateCommand(com, payload)
-	var response Response
-
-	data, err := cli.SendCommand(command)
-	if err != nil {
-		response.Status=false
-		response.Response=fmt.Sprintf("CLI: Failed to send command: %v\n", err)
-		return response
-	}
-
-
-	if err := json.Unmarshal(data, &response); err != nil {
-		response.Status=false
-		response.Response=fmt.Sprintf("CLI: Failed to parse response: %v\n", err)
-		return response
-	}
-	return response
-}
 
 
 
@@ -194,6 +255,30 @@ func ProcessHelp(args []string) {
 }
 
 
+func (cli *CLI) SendPayload(command string, payload []any) Response {
+	request := Command{
+		Command: command,
+		Args:    payload,
+	}
+
+	data, err := json.Marshal(request)
+	if err != nil {
+		return Response{Status: false, Msg: fmt.Sprintf("CLI: Failed to encode request: %v", err)}
+	}
+
+	data = append(data, '\n')
+
+	if _, err := (*cli.unix_socket).Write(data); err != nil {
+		return Response{Status: false, Msg: fmt.Sprintf("CLI: Failed to send request: %v", err)}
+	}
+
+	var response Response
+	if err := json.NewDecoder(*cli.unix_socket).Decode(&response); err != nil {
+		return Response{Status: false, Msg: fmt.Sprintf("CLI: Failed to receive response: %v", err)}
+	}
+
+	return response
+}
 
 func (cli *CLI) ProcessCd(args []string){
 	if len(args) == 0 {
@@ -202,38 +287,58 @@ func (cli *CLI) ProcessCd(args []string){
 
 	switch args[0] {
 		case "app":
+			if len(args) < 2 {
+				fmt.Println("CLI: Application name is missing")
+				return
+			}
 
-			response:=cli.SendPipeline("cd",args)
+			appName := strings.TrimSpace(strings.ReplaceAll(strings.Join(args[1:], " "), " ", "_"))
+			currentAppID := global.CurrentAppID
+			payload := []any{"app",appName, currentAppID}
 
+			response := cli.SendPayload("cd", payload)
 			if !response.Status {
-				fmt.Println("CLI: Failed , Reponse is",response.Response)
+				fmt.Println(response.Msg)
 				return
 			}
 
-			appPathItems, ok := response.Response.([]any)
+			fmt.Println(response.Msg)
+
+			if len(response.Args) < 2 {
+				fmt.Println("CLI: Invalid response arguments")
+				return
+			}
+
+			appName, ok := response.Args[0].(string)
 			if !ok {
-				fmt.Println("CLI: Invalid application path response")
+				fmt.Println("CLI: Invalid application name")
 				return
 			}
 
-			appPath := make([]string, 0, len(appPathItems))
-			for _, item := range appPathItems {
-				appPath = append(appPath, item.(string))
-			}
+			appID, ok := response.Args[1].(string)
 			if !ok {
-				fmt.Println("CLI: Invalid application path response")
-				fmt.Println("Reponse is",response.Response)
-
+				fmt.Println("CLI: Invalid application ID")
 				return
 			}
 
-			global.AppPath = appPath
-			// fmt.Println("Reponse is",response.Response)
-		
+			global.CurrentAppPath = append(global.CurrentAppPath, appName)
+			global.CurrentAppID = appID
+
 		case "..":
-		if len(global.AppPath) > 1 {
-			global.AppPath = global.AppPath[:len(global.AppPath)-1]
-		}
+			currentAppID := global.CurrentAppID
+			payload := []any{currentAppID}
+
+			response := cli.SendPayload("..", payload)
+			if !response.Status {
+				fmt.Println(response.Msg)
+				return
+			}else{
+				fmt.Println(response.Msg)
+			}
+
+			for _, item := range response.Args {
+				fmt.Println(item)
+			}
 
 		default:
 			fmt.Println("CLI: Unknown CD operation:", args[0])
@@ -242,20 +347,18 @@ func (cli *CLI) ProcessCd(args []string){
 
 
 func (cli *CLI) ProcessLs(args []string) {
-	response:=cli.SendPipeline("ls",args)
+	payload := []any{global.CurrentAppID}
+	response := cli.SendPayload("ls", payload)
 
 	if !response.Status {
-		fmt.Println(response.Response)
+		fmt.Println(response.Msg)
 		return
+	}else{
+		fmt.Println(response.Msg)
 	}
 
-	switch items := response.Response.(type) {
-	case []any:
-		for _, item := range items {
-			fmt.Println(item)
-		}
-	default:
-		fmt.Println(response.Response)
+	for _, item := range response.Args {
+		fmt.Println(item)
 	}
 }
 

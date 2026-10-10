@@ -1,41 +1,69 @@
 package Actions
 
 import (
+	"encoding/json"
+	"engine/Global"
 	"fmt"
+	"os"
+
+	"github.com/google/uuid"
 )
 
 
+type WS_Actions_config map[uuid.UUID]*WsAction
 
-
-
-
-
-var Ws_executor_types = []string{
-	"send",
-	"connect",
-	"recieve",
+type WsAction struct {
+	Global_name            string  `json:"global_name"`
+	Name                   string  `json:"name"`
+	Path                   string  `json:"path"`
+	Executor_type          string  `json:"executor_type"`
+	Executor_function_name string  `json:"executor_function_name"`
+	Opts                   WS_opts `json:"opts"`
 }
 
+type WS_opts struct {
+	Executor_type string `json:"executor_type"`
+}
 
+func CreateWsAction(action_name string, opts WS_opts)* WsAction {
+	return &WsAction{
+		Global_name: action_name,
+		Name:        action_name,
+		Opts:        opts,
+	}
+}
 
-func (this *Ws_Action_obj)CreateAction(global_name string,action_name string, action_opts Action_opts) WsAction {
-	httpOpts, ok := action_opts.Opts.(HTTP_opts)
-	if !ok {
-		fmt.Println("Invalid HTTP options")
-		return WsAction{}
+func CreateWSActionsConfig() WS_Actions_config {
+	return make(WS_Actions_config)
+}
+var ws_actions_config_path = Global.GlobalConfig.Ws_ActionsConfigPath
+
+func (config *WS_Actions_config) RestoreWSActionsConfig() error {
+	data, err := os.ReadFile(ws_actions_config_path)
+	if err != nil {
+		return fmt.Errorf("failed to read WebSocket actions config: %w", err)
 	}
 
-	var ws_action = WsAction{
-		Global_name: 			global_name,
-		Name:                   action_name,
-		Executor_type:          httpOpts.Executor_type,
-		Path:                   "",
-		Executor_function_name: "",
-		Opts: WS_opts{},
+	if err := json.Unmarshal(data, config); err != nil {
+		return fmt.Errorf("failed to parse WebSocket actions config: %w", err)
 	}
 
+	return nil
+}
 
+func (config *WS_Actions_config) SaveWSActionsConfig() error {
+	data, err := json.MarshalIndent(config, "", "    ")
+	if err != nil {
+		return fmt.Errorf("Engine: failed to marshal WebSocket actions config: %w", err)
+	}
 
-	return ws_action
+	if err := os.MkdirAll("Actions", 0755); err != nil {
+		return fmt.Errorf("Engine: failed to create actions config directory: %w", err)
+	}
 
+	if err := os.WriteFile(ws_actions_config_path, data, 0644); err != nil {
+		return fmt.Errorf("Engine: failed to save WebSocket actions config: %w", err)
+	}
+
+	return nil
 }

@@ -7,10 +7,12 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"engine/Actions"
 	"engine/Global"
+	"engine/Sequences"
+
+	"github.com/google/uuid"
 )
 
 func StartSocket(engine *Engine) {
@@ -43,14 +45,33 @@ func StartSocket(engine *Engine) {
 
 }
 
-func ListenForClients(listener net.Listener,engine *Engine) error {
+func ListenForClients(listener net.Listener, engine *Engine) error {
 	conn, err := listener.Accept()
 	if err != nil {
 		return fmt.Errorf("failed to accept client: %w", err)
 	}
 
-	HandleClient(conn,engine)
+	if err := SendGlobalAppID(conn, engine); err != nil {
+		conn.Close()
+		return fmt.Errorf("failed to send GLOBAL application ID: %w", err)
+	}
+
+	HandleClient(conn, engine)
 	return nil
+}
+
+func SendGlobalAppID(conn net.Conn, engine *Engine) error {
+	for id, app := range *engine.App_config {
+		if app.Name == "GLOBAL" {
+			return SendResponse(conn, Response{
+				Status: true,
+				Msg:    "GLOBAL application ID",
+				Args:   []any{app.Name, id.String()},
+			})
+		}
+	}
+
+	return fmt.Errorf("GLOBAL application does not exist")
 }
 
 type Command struct {
@@ -82,16 +103,13 @@ func HandleClient(conn net.Conn, engine *Engine) {
 				continue
 			}
 
-			fmt.Printf("Command: %s\n", command.Command)
-			fmt.Printf("Args: %v\n", command.Args)
-			status,response:=HandleCommand(command, engine)
+			fmt.Printf("Engine: Command: %s\n", command.Command)
+			fmt.Printf("Engine: Args: %v\n", command.Args)
+			response:=HandleCommand(command, engine)
 			// Process command using engine here.
-			responseObj := Response{
-				Status:   status,
-				Response: response,
-			}
+			
 
-			if err := SendResponse(conn, responseObj); err != nil {
+			if err := SendResponse(conn, response); err != nil {
 				fmt.Printf("Failed to send response: %v\n", err)
 			}
 		}
@@ -99,27 +117,31 @@ func HandleClient(conn net.Conn, engine *Engine) {
 }
 
 
-func HandleCommand(command Command, engine *Engine) (bool,any) {
+func HandleCommand(command Command, engine *Engine) Response {
 	switch command.Command {
 	case "create":
-		status,response:=ProcessCreate(command.Args, engine)
-		return status,response
+		response:=ProcessCreate(command.Args, engine)
+		return response
 	case "cd":
-		status,response:=ProcessCd(command.Args,engine)
-		return status,response
+		response:=ProcessCd(command.Args,engine)
+		return response
 	case "ls":
-		status,response:=ProcessLs(command.Args,engine)
-		return status,response
+		response:=ProcessLs(command.Args,engine)
+		return response
 	default:
-		response:=fmt.Sprintf("CLI: Unknown command: %v", command.Command)
-		return false,response
+		return Response{
+			Status: false,
+			Msg:    fmt.Sprintf("CLI: Unknown command: %v", command.Command),
+			Args:   []any{},
+		}
 
 	}
 }
 
 type Response struct {
-	Status   bool `json:"status"`
-	Response any    `json:"response"`
+	Status bool   `json:"status"`
+	Msg    string `json:"msg"`
+	Args   []any  `json:"args"`
 }
 
 func SendResponse(conn net.Conn, responseObj Response) error {
@@ -137,151 +159,236 @@ func SendResponse(conn net.Conn, responseObj Response) error {
 }
 
 
-func ProcessCreate(args []any, engine *Engine) (bool, any) {
+func ProcessCreate(args []any, engine *Engine) Response {
 	if len(args) == 0 {
-		return false, "Engine: Missing create operation"
+		return Response{Status: false, Msg: "Engine: Missing create operation", Args: []any{}}
 	}
 
 	operation, ok := args[0].(string)
 	if !ok {
-		return false, "Engine: Create operation must be a string"
+		return Response{Status: false, Msg: "Engine: Create operation must be a string", Args: []any{}}
 	}
 
 	switch operation {
-	case "app":
-		if len(args) < 2 {
-			return false, "Engine: Missing app name"
-		}
+		case "app":
+			if len(args) < 3 {
+				return Response{Status: false, Msg: "Engine: Expected app name and parent application UUID", Args: []any{}}
+			}
 
-		appName, ok := args[1].(string)
-		if !ok {
-			return false, "Engine: App name must be a string"
-		}
+			appName, ok := args[1].(string)
+			if !ok {
+				return Response{Status: false, Msg: "Engine: App name must be a string", Args: []any{}}
+			}
 
-		if len(args) < 3 {
-			return false, "Engine: Missing app path"
-		}
+			parentIDString, ok := args[2].(string)
+			if !ok {
+				return Response{Status: false, Msg: "Engine: Parent application ID must be a UUID string", Args: []any{}}
+			}
 
-		appPath, ok := args[2].(string)
-		if !ok {
-			return false, "Engine: App path must be a string"
-		}
+			parentID, err := uuid.Parse(parentIDString)
+			if err != nil {
+				return Response{Status: false, Msg: fmt.Sprintf("Engine: Invalid parent application UUID: %v", err), Args: []any{}}
+			}
 
-		fmt.Printf("Engine: Creating app: %v with the path %v\n", appName, appPath)
+			if err := engine.CreateApp(appName, parentID); err != nil {
+				return Response{Status: false, Msg: err.Error(), Args: []any{}}
+			}
 
-		response := engine.CreateApp(appName, appPath)
-		if strings.HasPrefix(response, "Engine: ") {
-			return !strings.Contains(response, "Failed"), response
-		}
+			return Response{Status: true, Msg: fmt.Sprintf("Engine: Application %q created successfully", appName), Args: []any{}}
 
-		return true, response
-	case "action":
-		if len(args) < 2 {
-			return false, "Engine: Missing action name"
-		}
+		case "action":
+			if len(args) < 4 {
+				return Response{Status: false, Msg: "Engine: Expected action name, application UUID, and action options", Args: []any{}}
+			}
 
-		actionName, ok := args[1].(string)
-		if !ok {
-			return false, "Engine: Action name must be a string"
-		}
+			actionName, ok := args[1].(string)
+			if !ok {
+				return Response{Status: false, Msg: "Engine: Action name must be a string", Args: []any{}}
+			}
 
-		if len(args) < 3 {
-			return false, "Engine: Missing app path"
-		}
+			appIDString, ok := args[2].(string)
+			if !ok {
+				return Response{Status: false, Msg: "Engine: Application ID must be a UUID string", Args: []any{}}
+			}
 
-		appPath, ok := args[2].(string)
-		if !ok {
-			return false, "Engine: App path must be a string"
-		}
+			appID, err := uuid.Parse(appIDString)
+			if err != nil {
+				return Response{Status: false, Msg: fmt.Sprintf("Engine: Invalid application UUID: %v", err), Args: []any{}}
+			}
 
-		apps := engine.GetAppNamesFromPath(appPath)
-		if len(apps) == 0 {
-			return false, fmt.Sprintf("Engine: Application path %q does not exist", appPath)
-		}
+			optsJSON, err := json.Marshal(args[3])
+			if err != nil {
+				return Response{Status: false, Msg: fmt.Sprintf("Engine: Failed to encode action options: %v", err), Args: []any{}}
+			}
 
-		if len(args) < 4 {
-			return false, "Engine: Missing action options"
-		}
+			var rawOpts struct {
+				ActionType string          `json:"action_type"`
+				HTTP       json.RawMessage `json:"http"`
+				WS         json.RawMessage `json:"ws"`
+			}
 
-		opts, ok := args[len(args)-1].(Actions.Action_opts)
-		if !ok {
-			return false, "Engine: Action options must be of type Actions.Action_opts"
-		}
+			if err := json.Unmarshal(optsJSON, &rawOpts); err != nil {
+				return Response{Status: false, Msg: fmt.Sprintf("Engine: Failed to decode action options: %v", err), Args: []any{}}
+			}
 
-		appName := apps[len(apps)-1]
-		parentPath := strings.TrimSuffix(appPath, "_"+appName)
+			var opts any
 
-		if err := engine.CreateAction(appName, parentPath, actionName, opts); err != nil {
-			return false, fmt.Sprintf("Engine: Failed to create action: %v", err)
-		}
+			switch rawOpts.ActionType {
+			case "http":
+				var httpOpts Actions.HTTP_opts
+				if err := json.Unmarshal(rawOpts.HTTP, &httpOpts); err != nil {
+					return Response{Status: false, Msg: fmt.Sprintf("Engine: Invalid HTTP action options: %v", err), Args: []any{}}
+				}
+				opts = httpOpts
 
-		return true, fmt.Sprintf("Engine: Action %q created successfully", actionName)
+			case "ws":
+				var wsOpts Actions.WS_opts
+				if err := json.Unmarshal(rawOpts.WS, &wsOpts); err != nil {
+					return Response{Status: false, Msg: fmt.Sprintf("Engine: Invalid WebSocket action options: %v", err), Args: []any{}}
+				}
+				opts = wsOpts
 
-	default:
-		return false, "Engine: Unknown create command"
+			default:
+				return Response{Status: false, Msg: fmt.Sprintf("Engine: Unsupported action type %q", rawOpts.ActionType), Args: []any{}}
+			}
+
+			if err := engine.CreateAction(appID, actionName, opts); err != nil {
+				return Response{Status: false, Msg: err.Error(), Args: []any{}}
+			}
+
+			return Response{Status: true, Msg: fmt.Sprintf("Engine: Action %q created successfully", actionName), Args: []any{}}
+		
+		case "sequence":
+			if len(args) < 3 {
+				return Response{Status: false, Msg: "Engine: Expected sequence name and application UUID", Args: []any{}}
+			}
+
+			sequenceName, ok := args[1].(string)
+			if !ok {
+				return Response{Status: false, Msg: "Engine: Sequence name must be a string", Args: []any{}}
+			}
+
+			appIDString, ok := args[2].(string)
+			if !ok {
+				return Response{Status: false, Msg: "Engine: Application ID must be a UUID string", Args: []any{}}
+			}
+
+			appID, err := uuid.Parse(appIDString)
+			if err != nil {
+				return Response{Status: false, Msg: fmt.Sprintf("Engine: Invalid application UUID: %v", err), Args: []any{}}
+			}
+
+			sequence := Sequences.CreateSequence(sequenceName)
+
+			(*engine.Sequence_config)[sequence.ID] = *sequence
+
+			app, exists := (*engine.App_config)[appID]
+			if !exists {
+				delete(*engine.Sequence_config, sequence.ID)
+				return Response{Status: false, Msg: "Engine: Application not found", Args: []any{}}
+			}
+
+			app.Sequences[sequenceName] = sequence.ID
+
+			if err := engine.Sequence_config.SaveSequenceConfig(); err != nil {
+				delete(*engine.Sequence_config, sequence.ID)
+				delete(app.Sequences, sequenceName)
+				return Response{Status: false, Msg: err.Error(), Args: []any{}}
+			}
+
+			if err := engine.App_config.SaveAppConfig(); err != nil {
+				delete(*engine.Sequence_config, sequence.ID)
+				delete(app.Sequences, sequenceName)
+				return Response{Status: false, Msg: err.Error(), Args: []any{}}
+			}
+
+			return Response{Status: true, Msg: fmt.Sprintf("Engine: Sequence %q created successfully", sequenceName), Args: []any{}}
+			
+
+		
+		default:
+			return Response{Status: false, Msg: "Engine: Unknown create command", Args: []any{}}
 	}
 }
 
-func ProcessCd(args []any, engine *Engine) (bool, any) {
-	if len(args) == 0 {
-		return false, "Engine: Missing CD operation"
+func ProcessCd(args []any, engine *Engine) Response {
+	if len(args) < 2 {
+		return Response{Status: false, Msg: "Engine: Expected application name and parent application UUID", Args: []any{}}
 	}
 
 	operation, ok := args[0].(string)
 	if !ok {
-		return false, "Engine: CD operation must be a string"
+		return Response{Status: false, Msg: "Engine: CD operation must be a string", Args: []any{}}
 	}
 
 	switch operation {
 	case "app":
-		if len(args) < 2 {
-			return false, "Engine: Missing application name"
-		}
-
 		appName, ok := args[1].(string)
 		if !ok {
-			return false, "Engine: Application name must be a string"
+			return Response{Status: false, Msg: "Engine: Application name must be a string", Args: []any{}}
 		}
 
 		if len(args) < 3 {
-			return false, "Engine: Missing app path"
+			return Response{Status: false, Msg: "Engine: Missing parent application UUID", Args: []any{}}
 		}
 
-		appPath, ok := args[2].(string)
+		parentIDString, ok := args[2].(string)
 		if !ok {
-			return false, "Engine: App path must be a string"
+			return Response{Status: false, Msg: "Engine: Parent application ID must be a UUID string", Args: []any{}}
 		}
 
-		app := engine.GetAppFromPath(appPath + "_" + appName)
-		if app == nil {
-			return false, fmt.Sprintf("Engine: Application %q does not exist at path %q", appName, appPath)
+		parentID, err := uuid.Parse(parentIDString)
+		if err != nil {
+			return Response{Status: false, Msg: fmt.Sprintf("Engine: Invalid parent application UUID: %v", err), Args: []any{}}
 		}
 
-		return true, append(strings.Split(appPath, "_"), appName)
+		parentApp, exists := (*engine.App_config)[parentID]
+		if !exists {
+			return Response{Status: false, Msg: fmt.Sprintf("Engine: Parent application with ID %q does not exist", parentIDString), Args: []any{}}
+		}
 
-	
+		childID, exists := parentApp.Children[appName]
+		if !exists {
+			return Response{Status: false, Msg: fmt.Sprintf("Engine: Application %q does not exist under parent %q", appName, parentApp.Name), Args: []any{}}
+		}
+
+		if _, exists := (*engine.App_config)[childID]; !exists {
+			return Response{Status: false, Msg: fmt.Sprintf("Engine: Application %q references a missing application ID %q", appName, childID), Args: []any{}}
+		}
+
+		return Response{Status: true, Msg: "Engine: Application selected successfully", Args: []any{appName, childID.String()}}
+
 	default:
-		return false, "Engine: Unknown cd command"
+		return Response{Status: false, Msg: "Engine: Unknown cd command", Args: []any{}}
 	}
 }
 
-func ProcessLs(args []any, engine *Engine) (bool, any) {
+func ProcessLs(args []any, engine *Engine) Response {
 	if len(args) == 0 {
-		return false, "Engine: Missing application path"
+		return Response{Status: false, Msg: "Engine: Missing application UUID", Args: []any{}}
 	}
 
-	appPath, ok := args[0].(string)
+	appIDString, ok := args[0].(string)
 	if !ok {
-		return false, "Engine: Application path must be a string"
+		return Response{Status: false, Msg: "Engine: Application ID must be a UUID string", Args: []any{}}
 	}
 
-	children, err := engine.GetAppChildren(appPath)
+	appID, err := uuid.Parse(appIDString)
 	if err != nil {
-		return false, fmt.Sprintf("Engine: Failed to list application children: %v", err)
+		return Response{Status: false, Msg: fmt.Sprintf("Engine: Invalid application UUID: %v", err), Args: []any{}}
 	}
 
-	return true, children
-}
+	app, exists := (*engine.App_config)[appID]
+	if !exists {
+		return Response{Status: false, Msg: fmt.Sprintf("Engine: Application with ID %q does not exist", appIDString), Args: []any{}}
+	}
 
+	children := make([]any, 0, len(app.Children))
+	for name := range app.Children {
+		children = append(children, name)
+	}
+
+	return Response{Status: true, Msg: "Engine: Children retrieved successfully", Args: children}
+}
 
 

@@ -1,1 +1,17 @@
-{}
+{
+    "24d7932f-20e7-44d2-8866-624fbbb5a62e": {
+        "global_name": "asdasd",
+        "name": "asdasd",
+        "path": "",
+        "executor_type": "",
+        "executor_function_name": "",
+        "opts": {
+            "executor_type": "",
+            "url": "",
+            "method": "",
+            "headers": null,
+            "query": null,
+            "body": null
+        }
+    }
+}

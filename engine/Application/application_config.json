@@ -1,11 +1,24 @@
 {
-    "GLOBAL": {
+    "8e07b5c4-9c4b-44ab-8051-1c6f69518c2b": {
+        "application_id": "8e07b5c4-9c4b-44ab-8051-1c6f69518c2b",
+        "parent_id": "d8bdb32c-d8e8-42ee-90b4-e557d1833d44",
+        "name": "test",
+        "actions": {
+            "asdasd": "24d7932f-20e7-44d2-8866-624fbbb5a62e"
+        },
+        "sequences": {
+            "seq": "43709724-573f-4089-9e3c-370bc874b1d8"
+        },
+        "children": {}
+    },
+    "d8bdb32c-d8e8-42ee-90b4-e557d1833d44": {
+        "application_id": "d8bdb32c-d8e8-42ee-90b4-e557d1833d44",
+        "parent_id": "00000000-0000-0000-0000-000000000000",
         "name": "GLOBAL",
+        "actions": {},
+        "sequences": {},
         "children": {
-            "test": {
-                "name": "test",
-                "children": {}
-            }
+            "test": "8e07b5c4-9c4b-44ab-8051-1c6f69518c2b"
         }
     }
 }

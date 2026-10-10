@@ -8,7 +8,6 @@ type Global struct {
 
 	SequenceConfigPath    string
 	ApplicationConfigPath string
-	ActionStoragePath     string
 
 	HooksPath     string	
 
@@ -23,7 +22,6 @@ var GlobalConfig = Global{
 
 	SequenceConfigPath:    "Sequences/sequence_config.json",
 	ApplicationConfigPath: "Application/application_config.json",
-	ActionStoragePath:     "data/actions/",
 
 	HooksPath:     "hooks/",
 
