@@ -20,9 +20,6 @@ type Http_Actions_config map[uuid.UUID]*Http_action
 type Http_action struct {
 	Global_namme           string    `json:"global_name"`
 	Name                   string    `json:"name"`
-	Path                   string    `json:"path"`
-	Executor_type          string    `json:"executor_type"`
-	Executor_function_name string    `json:"executor_function_name"`
 	Opts                   HTTP_opts `json:"opts"`
 }
 

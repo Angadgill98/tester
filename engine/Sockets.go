@@ -391,4 +391,52 @@ func ProcessLs(args []any, engine *Engine) Response {
 	return Response{Status: true, Msg: "Engine: Children retrieved successfully", Args: children}
 }
 
+func ProcessExecute(args []any, engine *Engine) Response {
+	if len(args) == 0 {
+		return Response{Status: false, Msg: "Engine: Missing execute operation", Args: []any{}}
+	}
+
+	operation, ok := args[0].(string)
+	if !ok {
+		return Response{Status: false, Msg: "Engine: Execute operation must be a string", Args: []any{}}
+	}
+
+	switch operation {
+	case "action":
+		if len(args) < 2 {
+			return Response{Status: false, Msg: "Engine: Missing action type", Args: []any{}}
+		}
+
+		actionType, ok := args[1].(string)
+		if !ok {
+			return Response{Status: false, Msg: "Engine: Action type must be a string", Args: []any{}}
+		}
+
+		switch actionType {
+			case "http":
+				// Handle HTTP action execution
+				return Response{Status: true, Msg: "Engine: HTTP action execution", Args: []any{}}
+
+			case "ws":
+				// Handle WebSocket action execution
+				return Response{Status: true, Msg: "Engine: WebSocket action execution", Args: []any{}}
+
+			case "":
+				return Response{Status: false, Msg: "Engine: Action type is empty", Args: []any{}}
+
+			default:
+				return Response{Status: false, Msg: fmt.Sprintf("Engine: Unknown action type %q", actionType), Args: []any{}}
+			}
+
+	case "sequence":
+		// Handle sequence execution
+		return Response{Status: true, Msg: "Engine: Sequence execution", Args: []any{}}
+
+	case "":
+		return Response{Status: false, Msg: "Engine: Execute operation is empty", Args: []any{}}
+
+	default:
+		return Response{Status: false, Msg: fmt.Sprintf("Engine: Unknown execute operation %q", operation), Args: []any{}}
+	}
+}
 
