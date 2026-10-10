@@ -31,28 +31,24 @@ func CreateEngine(applicationObj *Application.Application_obj,actions_obj *Actio
 }
 
 
-func (engine *Engine) CreateApp(appName string, path string) {
+func (engine *Engine) CreateApp(appName string, path string)string {
 	currentApp := engine.GetAppFromPath(path)
 	if currentApp == nil {
-		fmt.Println("Engine: Invalid app path")
-		return
+		return fmt.Sprintf("Engine: Invalid app path")
 	}
 	fmt.Println("Engine: App path is valid")
 
 	if _, exists := currentApp.Children[appName]; exists {
-		fmt.Println("Engine: App already exist")
-
-		return
+		return fmt.Sprintf("Engine: App already exist")
 	}
 
 	application := engine.ApplicationObj.CreateApplication(appName)
 	currentApp.Children[appName] = application
 
 	if err := engine.ApplicationObj.SaveApplicationObj(); err != nil {
-		fmt.Printf("Engine: Failed to save application config: %v\n", err)
-		return
+		return fmt.Sprintf("Engine: Failed to save application config: %v\n", err)
 	}
-	fmt.Println("Engine: Created and Saved the app")
+	return fmt.Sprintf("Engine: Created and Saved the app")
 
 }
 
@@ -85,52 +81,55 @@ func (engine *Engine) GetAppNamesFromPath(path string) []string {
 	return strings.Split(path, "_")
 }
 
-func (engine *Engine) CreateAction(appName string, path string, actionName string,opts Actions.Action_opts) {
+func (engine *Engine) CreateAction(appName string, path string, actionName string, opts Actions.Action_opts) error {
 	currentApp := engine.GetAppFromPath(path)
 	if currentApp == nil {
-		return
+		return fmt.Errorf("application path %q does not exist", path)
 	}
 
 	if _, exists := currentApp.Children[appName]; !exists {
-		return
+		return fmt.Errorf("application %q does not exist at path %q", appName, path)
 	}
 
-	var actions_path=engine.GetActionPath(path,appName)
-	engine.CreateActionPath(actions_path)
+	actionsPath := engine.GetActionPath(path, appName)
+	engine.CreateActionPath(actionsPath)
 
-
-	var global_actionName=path+"_"+appName+"_"+actionName
-
+	globalActionName := path + "_" + appName + "_" + actionName
 
 	switch opts.Action_type {
 	case "http":
 		httpOpts, ok := opts.Opts.(Actions.HTTP_opts)
 		if !ok {
-			return
+			return fmt.Errorf("invalid HTTP action options")
 		}
 
-		action := engine.ActionsObj.Http.CreateAction(global_actionName, actionName, opts)
+		action := engine.ActionsObj.Http.CreateAction(globalActionName, actionName, opts)
 		action.Opts = httpOpts
-		action.Path = actions_path
+		action.Path = actionsPath
 
-		engine.ActionsObj.Http[global_actionName] = append(engine.ActionsObj.Http[global_actionName], action)
+		engine.ActionsObj.Http[globalActionName] = append(engine.ActionsObj.Http[globalActionName], action)
 
 	case "ws":
 		wsOpts, ok := opts.Opts.(Actions.WS_opts)
 		if !ok {
-			return
+			return fmt.Errorf("invalid WebSocket action options")
 		}
 
-		action := engine.ActionsObj.Ws.CreateAction(global_actionName, actionName, opts)
+		action := engine.ActionsObj.Ws.CreateAction(globalActionName, actionName, opts)
 		action.Opts = wsOpts
-		action.Path = actions_path
-	}
+		action.Path = actionsPath
 
+		engine.ActionsObj.Ws[globalActionName] = append(engine.ActionsObj.Ws[globalActionName], action)
+
+	default:
+		return fmt.Errorf("unsupported action type %q", opts.Action_type)
+	}
 
 	if err := engine.ActionsObj.SaveActionsObj(); err != nil {
-		fmt.Printf("Engine: Failed to save actions: %v\n", err)
-		return
+		return fmt.Errorf("failed to save actions: %w", err)
 	}
+
+	return nil
 }
 
 func (engine *Engine) GetActionPath(path string, appName string) string {
