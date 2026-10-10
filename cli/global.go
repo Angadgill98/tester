@@ -11,5 +11,5 @@ var global = Global{
 	SocketRetries: 3,
 	EnginePath:    "../engine",
 	GlobalAppName: "GLOBAL",
-	AppPath:       []string{},
+	AppPath:       []string{"GLOBAL"},
 }

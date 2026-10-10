@@ -13,6 +13,7 @@ func main() {
 
 	if _, exists := (*applicationObj)["GLOBAL"]; !exists {
 		(*applicationObj)["GLOBAL"] = applicationObj.CreateApplication("GLOBAL")
+		applicationObj.SaveApplicationObj()
 	}
 
 	actionsObj,err := Actions.CreateActionsObj()
@@ -27,7 +28,8 @@ func main() {
 		return
 	}
 
-	_ = sequencesObj
-	_ = actionsObj
+	var engine=CreateEngine(applicationObj,actionsObj,sequencesObj)
+
+	StartSocket(&engine)
 
 }

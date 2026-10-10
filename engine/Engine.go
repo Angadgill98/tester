@@ -5,6 +5,7 @@ import (
 	"engine/Application"
 	"engine/Global"
 	"engine/Sequences"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,15 +34,26 @@ func CreateEngine(applicationObj *Application.Application_obj,actions_obj *Actio
 func (engine *Engine) CreateApp(appName string, path string) {
 	currentApp := engine.GetAppFromPath(path)
 	if currentApp == nil {
+		fmt.Println("Engine: Invalid app path")
 		return
 	}
+	fmt.Println("Engine: App path is valid")
 
 	if _, exists := currentApp.Children[appName]; exists {
+		fmt.Println("Engine: App already exist")
+
 		return
 	}
 
 	application := engine.ApplicationObj.CreateApplication(appName)
 	currentApp.Children[appName] = application
+
+	if err := engine.ApplicationObj.SaveApplicationObj(); err != nil {
+		fmt.Printf("Engine: Failed to save application config: %v\n", err)
+		return
+	}
+	fmt.Println("Engine: Created and Saved the app")
+
 }
 
 func (engine *Engine) GetAppFromPath(path string) *Application.Application {
@@ -50,6 +62,11 @@ func (engine *Engine) GetAppFromPath(path string) *Application.Application {
 	for _, name := range engine.GetAppNamesFromPath(path) {
 		child, exists := currentApp.Children[name]
 		if !exists {
+			child, exists = (*engine.ApplicationObj)[name]
+		}
+
+		if !exists {
+			fmt.Printf("Engine: Failed to get the app:%v on the path:%v\n", name, path)
 			return nil
 		}
 
@@ -58,6 +75,8 @@ func (engine *Engine) GetAppFromPath(path string) *Application.Application {
 
 	return currentApp
 }
+
+
 func (engine *Engine) GetAppNamesFromPath(path string) []string {
 	if path == "" {
 		return []string{}
@@ -94,6 +113,8 @@ func (engine *Engine) CreateAction(appName string, path string, actionName strin
 		action.Opts = httpOpts
 		action.Path = actions_path
 
+		engine.ActionsObj.Http[global_actionName] = append(engine.ActionsObj.Http[global_actionName], action)
+
 	case "ws":
 		wsOpts, ok := opts.Opts.(Actions.WS_opts)
 		if !ok {
@@ -106,10 +127,11 @@ func (engine *Engine) CreateAction(appName string, path string, actionName strin
 	}
 
 
-	
-	
+	if err := engine.ActionsObj.SaveActionsObj(); err != nil {
+		fmt.Printf("Engine: Failed to save actions: %v\n", err)
+		return
+	}
 }
-
 
 func (engine *Engine) GetActionPath(path string, appName string) string {
 	actionPath := Global.GlobalConfig.ActionStoragePath+ path + "_" + appName
@@ -122,3 +144,19 @@ func (engine *Engine) CreateActionPath(actionPath string) error {
 
 	return os.MkdirAll(filepath.Dir(actionPath), 0755)
 }
+
+func (engine *Engine) GetAppChildren(path string) ([]string, error) {
+	app := engine.GetAppFromPath(path)
+	if app == nil {
+		return nil, fmt.Errorf("application path %q does not exist", path)
+	}
+
+	children := make([]string, 0, len(app.Children))
+	for name := range app.Children {
+		children = append(children, name)
+	}
+
+	return children, nil
+}
+
+

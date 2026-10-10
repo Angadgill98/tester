@@ -76,3 +76,25 @@ func ReadWSActionsConfig( actionObj *Ws_Action_obj) error {
 }
 
 
+
+func (actionsObj *Actions_obj) SaveActionsObj() error {
+	httpData, err := json.MarshalIndent(actionsObj.Http, "", "    ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal HTTP actions: %w", err)
+	}
+
+	if err := os.WriteFile(Global.GlobalConfig.Http_ActionsConfigPath, httpData, 0644); err != nil {
+		return fmt.Errorf("failed to write HTTP actions file: %w", err)
+	}
+
+	wsData, err := json.MarshalIndent(actionsObj.Ws, "", "    ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal WebSocket actions: %w", err)
+	}
+
+	if err := os.WriteFile(Global.GlobalConfig.Ws_ActionsConfigPath, wsData, 0644); err != nil {
+		return fmt.Errorf("failed to write WebSocket actions file: %w", err)
+	}
+
+	return nil
+}

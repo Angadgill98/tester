@@ -1,0 +1,11 @@
+{
+    "GLOBAL": {
+        "name": "GLOBAL",
+        "children": {
+            "test": {
+                "name": "test",
+                "children": {}
+            }
+        }
+    }
+}

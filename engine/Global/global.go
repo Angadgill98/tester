@@ -10,19 +10,25 @@ type Global struct {
 	ApplicationConfigPath string
 	ActionStoragePath     string
 
-	HooksPath     string
+	HooksPath     string	
+
+
+	SocketPath		string
 
 }
 
 var GlobalConfig = Global{
-	Http_ActionsConfigPath:     "./Actions/actions_config.go",
-	Ws_ActionsConfigPath:     "./Actions/ws_actions_config.go",
+	Http_ActionsConfigPath:     "Actions/actions_config.json",
+	Ws_ActionsConfigPath:     "Actions/ws_actions_config.json",
 
-	SequenceConfigPath:    "./Sequence/sequence_config.json",
-	ApplicationConfigPath: "./Application/application_config.json",
+	SequenceConfigPath:    "Sequences/sequence_config.json",
+	ApplicationConfigPath: "Application/application_config.json",
 	ActionStoragePath:     "data/actions/",
 
 	HooksPath:     "hooks/",
+
+
+	SocketPath:"/tmp/testflow.sock",
 
 }
 

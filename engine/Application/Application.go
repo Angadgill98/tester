@@ -15,7 +15,7 @@ func CreateApplicationObj() *Application_obj {
 
 type Application struct {
 	Name     string                 `json:"name"`
-	Children map[string]*Application `json:"children,omitempty"`
+	Children map[string]*Application `json:"children"`
 }
 
 
@@ -39,3 +39,12 @@ func (applicationObj *Application_obj) SetUpApplicationObj() {
 	}
 }
 
+
+func (applicationObj *Application_obj) SaveApplicationObj() error {
+	data, err := json.MarshalIndent(*applicationObj, "", "    ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(Global.GlobalConfig.ApplicationConfigPath, data, 0644)
+}

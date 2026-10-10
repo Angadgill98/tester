@@ -25,7 +25,7 @@ type Command struct {
 }
 
 
-func StartCLILoop() {
+func (cli *CLI)StartCLILoop() {
 	fmt.Println("========== CLI START ==========")
 	fmt.Println("Available commands:")
 	fmt.Println("exit")
@@ -49,7 +49,7 @@ func StartCLILoop() {
 		operation := payload[0]
 		args := payload[1:]
 
-		HandleOperation(operation, args)
+		cli.HandleOperation(operation, args)
 	}
 }
 
@@ -57,36 +57,24 @@ func SplitCommand(command string) []string {
 	return strings.Fields(command)
 }
 
-func HandleOperation(operation string, args []string) {
+func (cli *CLI)HandleOperation(operation string, args []string) {
 	switch operation {
 	case "create":
-		ProcessCreate(args)
+		cli.ProcessCreate(args)
 
 	case "help":
-		ProcessHelp()
+		ProcessHelp(args)
+
+	case "cd":
+		cli.ProcessCd(args)
+
+	case "ls":
+		cli.ProcessLs(args)
+
 	default:
 		fmt.Println("Unknown operation:", operation)
 	}
 }
-
-func ProcessCreate(args []string) {
-	if len(args) == 0 {
-		return
-	}
-
-	switch args[0] {
-	case "app":
-		app := args[0]
-		payload := args[1:]
-
-
-		
-
-		data := CreateCommand(app, payload)
-
-	}
-}
-
 
 func CreateCommand(command string, args []string) []byte {
 	commandObj := Command{
@@ -102,6 +90,26 @@ func CreateCommand(command string, args []string) []byte {
 
 	return data
 }
+
+func (cli *CLI)ProcessCreate(args []string) {
+	if len(args) == 0 {
+		return
+	}
+
+	switch args[0] {
+	case "app":
+		
+		current_path := strings.Join(global.AppPath, "_")
+		payload := args[0:]
+		payload = append(payload, current_path)
+
+		command := CreateCommand("create", payload)
+		cli.SendCommand(command)
+	}
+}
+
+
+
 
 
 
@@ -150,3 +158,46 @@ func ProcessHelp(args []string) {
 
 	fmt.Println(subCommand)
 }
+
+
+
+func (cli *CLI) ProcessCd(args []string){
+	if len(args) == 0 {
+		return
+	}
+
+	switch args[0] {
+		case "app":
+			commad:=CreateCommand("cd",args)
+			cli.SendCommand(commad)
+
+			break;
+			
+
+		default:
+	}
+}
+
+
+func (cli *CLI) ProcessLs(args []string){
+	if len(args) == 0 {
+		commad:=CreateCommand("ls",args)
+		cli.SendCommand(commad)
+
+	}
+
+	
+}
+
+
+func (cli *CLI) SendCommand(command []byte) error {
+	_, err := (*cli.unix_socket).Write(command)
+	if err != nil {
+		return fmt.Errorf("failed to send command: %w", err)
+	}
+
+	return nil
+}
+
+
+
