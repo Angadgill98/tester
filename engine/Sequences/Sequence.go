@@ -12,25 +12,28 @@ import (
 
 var sequence_config_path = Global.GlobalConfig.SequenceConfigPath
 
+type Action struct {
+	Type string    `json:"type"`
+	ID   uuid.UUID `json:"id"`
+}
+
 type Sequence_config map[uuid.UUID]Sequence
 
 type Sequence struct {
-    ID   uuid.UUID   `json:"id"`
-    Name string      `json:"name"`
-    Http []uuid.UUID `json:"http"`
-    Ws   []uuid.UUID `json:"ws"`
+	ID     uuid.UUID `json:"id"`
+	Name   string    `json:"name"`
+	Action []Action  `json:"action"`
 }
 
 func CreateSequence(name string) *Sequence {
-    return &Sequence{
-        ID:   uuid.New(),
-        Name: name,
-        Http: []uuid.UUID{},
-        Ws:   []uuid.UUID{},
-    }
+	return &Sequence{
+		ID:     uuid.New(),
+		Name:   name,
+		Action: []Action{},
+	}
 }
 
-func CreateSequenceConfig() (*Sequence_config) {
+func CreateSequenceConfig() *Sequence_config {
 	sequenceObj := make(Sequence_config)
 	return &sequenceObj
 }

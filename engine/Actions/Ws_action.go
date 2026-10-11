@@ -15,10 +15,19 @@ type WS_Actions_config map[uuid.UUID]*WsAction
 type WsAction struct {
 	Global_name            string  `json:"global_name"`
 	Name                   string  `json:"name"`
-	Path                   string  `json:"path"`
-	Executor_type          string  `json:"executor_type"`
-	Executor_function_name string  `json:"executor_function_name"`
 	Opts                   WS_opts `json:"opts"`
+}
+
+type WsAction_Connect struct{
+
+}
+
+type WsAction_Send struct{
+	
+}
+
+type WsAction_Receive struct{
+	
 }
 
 type WS_opts struct {

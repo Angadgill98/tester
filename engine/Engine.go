@@ -4,6 +4,7 @@ import (
 	"engine/Actions"
 	"engine/Application"
 	"engine/Sequences"
+	tester "engine/Tester"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -16,14 +17,16 @@ type Engine struct {
 	Http_config     *Actions.Http_Actions_config
 	Ws_config       *Actions.WS_Actions_config
 	Sequence_config *Sequences.Sequence_config
+	Tester *tester.Tester
 }
 
-func CreateEngine(appConfig *Application.Application_config, httpConfig *Actions.Http_Actions_config, wsConfig *Actions.WS_Actions_config, sequenceConfig *Sequences.Sequence_config) Engine {
+func CreateEngine(appConfig *Application.Application_config, httpConfig *Actions.Http_Actions_config, wsConfig *Actions.WS_Actions_config, sequenceConfig *Sequences.Sequence_config,tester *tester.Tester) Engine {
 	return Engine{
 		App_config:      appConfig,
 		Http_config:     httpConfig,
 		Ws_config:       wsConfig,
 		Sequence_config: sequenceConfig,
+		Tester: tester,
 	}
 }
 

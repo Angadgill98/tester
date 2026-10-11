@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"strings"
-
 )
 
 
@@ -63,6 +63,12 @@ func (cli *CLI)HandleOperation(operation string, args []string) {
 	case "create":
 		cli.ProcessCreate(args)
 
+	case "sequence":
+		cli.ProcessSequence(args)
+
+	case "execute":
+		cli.ProcessExecute(args)
+
 	case "help":
 		ProcessHelp(args)
 
@@ -76,7 +82,7 @@ func (cli *CLI)HandleOperation(operation string, args []string) {
 		fmt.Println(strings.Join(global.CurrentAppPath, "/"))
 
 	default:
-		fmt.Println("Unknown operation:", operation)
+		fmt.Println("CLI: Unknown operation:", operation)
 	}
 }
 
@@ -196,6 +202,87 @@ func (cli *CLI)ProcessCreate(args []string) {
 		default:
 			fmt.Println("CLI: Invalid create command. Use app, action, or sequence.")
 
+	}
+}
+
+func (cli *CLI) ProcessSequence(args []string) {
+	if len(args) < 1 {
+		fmt.Println("CLI: Missing sequence operation")
+		return
+	}
+
+	switch args[0] {
+	case "add":
+		if len(args) < 3 {
+			fmt.Println("CLI: Expected sequence name and action name")
+			return
+		}
+
+		sequenceName := args[1]
+		actionName := args[2]
+		currentAppID := global.CurrentAppID
+
+		response := cli.SendPayload("sequence", []any{"add", sequenceName, actionName, currentAppID})
+		if !response.Status {
+			fmt.Println(response.Msg)
+			return
+		}
+		fmt.Println(response.Msg)
+
+	case "remove":
+		if len(args) < 3 {
+			fmt.Println("CLI: Expected sequence name and action name")
+			return
+		}
+
+		sequenceName := args[1]
+		actionName := args[2]
+		currentAppID := global.CurrentAppID
+
+		response := cli.SendPayload("sequence", []any{"remove", sequenceName, actionName, currentAppID})
+		if !response.Status {
+			fmt.Println(response.Msg)
+			return
+		}
+		fmt.Println(response.Msg)
+
+	default:
+		fmt.Println("CLI: Invalid sequence operation. Use add or remove.")
+	}
+}
+
+func (cli *CLI) ProcessExecute(args []string) {
+	if len(args) < 2 {
+		fmt.Println("CLI: Invalid execute arguments")
+		return
+	}
+
+	operation := args[0]
+
+	switch operation {
+	case "action":
+		if len(args) < 2 {
+			fmt.Println("CLI: Action name is missing")
+			return
+		}
+
+		actionName := strings.TrimSpace(strings.ReplaceAll(strings.Join(args[1:], " "), " ", "_"))
+		appID := global.CurrentAppID
+
+		payload := []any{"action", actionName, appID}
+		response := cli.SendPayload("execute", payload)
+
+		if !response.Status {
+			fmt.Println(response.Msg)
+			return
+		}
+
+		fmt.Println(response.Msg)
+		for _, arg := range response.Args {
+			fmt.Printf("%+v\n", arg)
+		}
+	default:
+		fmt.Printf("CLI: Unknown execute operation %q\n", operation)
 	}
 }
 
@@ -324,6 +411,41 @@ func (cli *CLI) ProcessCd(args []string){
 			global.CurrentAppPath = append(global.CurrentAppPath, appName)
 			global.CurrentAppID = appID
 
+		case "action":
+			if len(args) < 2 {
+				fmt.Println("CLI: Action name is missing")
+				return
+			}
+
+			actionName := strings.TrimSpace(strings.ReplaceAll(strings.Join(args[1:], " "), " ", "_"))
+			currentAppID := global.CurrentAppID
+
+			payload := []any{"action",actionName, currentAppID}
+
+			response := cli.SendPayload("cd", payload)
+			if !response.Status {
+				fmt.Println(response.Msg)
+				return
+			}
+
+			actionType, editedOpts, err := EditActionOpts(response)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+
+			fmt.Println("CLI: Edited options:")
+			fmt.Println(string(editedOpts))
+
+			savePayload := []any{"save", actionName, currentAppID, actionType, json.RawMessage(editedOpts)}
+			saveResponse := cli.SendPayload("cd", savePayload)
+			if !saveResponse.Status {
+				fmt.Println(saveResponse.Msg)
+				return
+			}
+
+			fmt.Println(saveResponse.Msg)
+
 		case "..":
 			currentAppID := global.CurrentAppID
 			payload := []any{currentAppID}
@@ -383,3 +505,107 @@ func (cli *CLI) SendCommand(command []byte) ([]byte, error) {
 
 
 
+func EditActionOpts(response Response) (string, []byte, error) {
+	if !response.Status {
+		return "", nil, fmt.Errorf("%s", response.Msg)
+	}
+
+	if len(response.Args) < 2 {
+		return "", nil, fmt.Errorf("CLI: Invalid action options response")
+	}
+
+	actionType, ok := response.Args[0].(string)
+	if !ok {
+		return "", nil, fmt.Errorf("CLI: Invalid action type")
+	}
+
+	optsJSON, err := json.MarshalIndent(response.Args[1], "", "    ")
+	if err != nil {
+		return "", nil, fmt.Errorf("CLI: Failed to encode action options: %w", err)
+	}
+
+	editedJSON, err := OpenEditor(optsJSON)
+	if err != nil {
+		return "", nil, err
+	}
+
+	if !json.Valid(editedJSON) {
+		return "", nil, fmt.Errorf("CLI: Edited options contain invalid JSON")
+	}
+
+	return actionType, editedJSON, nil
+}
+
+
+
+
+func OpenEditor(data []byte) ([]byte, error) {
+	file, err := os.CreateTemp("", "testflow-*.json")
+	if err != nil {
+		return nil, err
+	}
+
+	filePath := file.Name()
+	defer os.Remove(filePath)
+
+	if _, err := file.Write(data); err != nil {
+		file.Close()
+		return nil, err
+	}
+
+	if err := file.Close(); err != nil {
+		return nil, err
+	}
+
+	editor := global.Editor
+	if editor == "" {
+		return nil, fmt.Errorf("CLI: No editor configured in global.Editor")
+	}
+
+	if _, err := exec.LookPath(editor); err != nil {
+		return nil, fmt.Errorf("CLI: Editor %q is not installed or available in PATH", editor)
+	}
+
+	switch editor {
+	case "nano":
+		err = ExecuteNano(filePath)
+	case "vim":
+		// err = ExecuteVim(filePath)
+	case "code":
+		cmd := exec.Command("code", "--wait", filePath)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err = cmd.Run()
+	default:
+		cmd := exec.Command(editor, filePath)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err = cmd.Run()
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("CLI: Failed to run editor: %w", err)
+	}
+
+	editedData, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	if !json.Valid(editedData) {
+		return nil, fmt.Errorf("CLI: Edited file contains invalid JSON")
+	}
+
+	return editedData, nil
+}
+
+func ExecuteNano(filePath string) error {
+	cmd := exec.Command("nano", "-m", filePath)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
+}

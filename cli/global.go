@@ -1,16 +1,17 @@
 package main
 
 type Global struct {
-	SocketRetries int
-	EnginePath    string
-	CurrentAppID	string
-	CurrentAppPath	[]string
+	SocketRetries  int
+	EnginePath     string
+	Editor         string
+	CurrentAppID   string
+	CurrentAppPath []string
 }
 
 var global = Global{
-	SocketRetries: 3,
-	EnginePath:    "../engine",
-	CurrentAppID: "",
-	CurrentAppPath:	[]string{},
-
+	SocketRetries:  3,
+	EnginePath:     "../engine",
+	Editor:         "code",
+	CurrentAppID:   "",
+	CurrentAppPath: []string{},
 }

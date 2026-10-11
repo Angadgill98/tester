@@ -122,6 +122,12 @@ func HandleCommand(command Command, engine *Engine) Response {
 	case "create":
 		response:=ProcessCreate(command.Args, engine)
 		return response
+	case "sequence":
+		response:=ProcessSequence(command.Args, engine)
+		return response
+	case "execute":
+		response:=ProcessExecute(command.Args, engine)
+		return response
 	case "cd":
 		response:=ProcessCd(command.Args,engine)
 		return response
@@ -311,6 +317,125 @@ func ProcessCreate(args []any, engine *Engine) Response {
 	}
 }
 
+func ProcessSequence(args []any, engine *Engine) Response {
+	if len(args) < 4 {
+		return Response{Status: false, Msg: "Engine: Expected operation, sequence name, action name, and application UUID", Args: []any{}}
+	}
+
+	operation, ok := args[0].(string)
+	if !ok {
+		return Response{Status: false, Msg: "Engine: Sequence operation must be a string", Args: []any{}}
+	}
+
+	sequenceName, ok := args[1].(string)
+	if !ok {
+		return Response{Status: false, Msg: "Engine: Sequence name must be a string", Args: []any{}}
+	}
+
+	actionName, ok := args[2].(string)
+	if !ok {
+		return Response{Status: false, Msg: "Engine: Action name must be a string", Args: []any{}}
+	}
+
+	appIDString, ok := args[3].(string)
+	if !ok {
+		return Response{Status: false, Msg: "Engine: Application ID must be a UUID string", Args: []any{}}
+	}
+
+	appID, err := uuid.Parse(appIDString)
+	if err != nil {
+		return Response{Status: false, Msg: fmt.Sprintf("Engine: Invalid application UUID: %v", err), Args: []any{}}
+	}
+
+	sequenceID, sequence, err := GetSequence(appID, sequenceName, engine)
+	if err != nil {
+		return Response{Status: false, Msg: err.Error(), Args: []any{}}
+	}
+
+	switch operation {
+	case "add":
+		actionID, err := GetActionID(appID, actionName, engine)
+		if err != nil {
+			return Response{Status: false, Msg: err.Error(), Args: []any{}}
+		}
+
+		actionType := "ws"
+		if _, exists := (*engine.Http_config)[actionID]; exists {
+			actionType = "http"
+		}
+
+		sequence.Action = append(sequence.Action, Sequences.Action{
+			Type: actionType,
+			ID:   actionID,
+		})
+
+	case "remove":
+		actionID, err := GetActionID(appID, actionName, engine)
+		if err != nil {
+			return Response{Status: false, Msg: err.Error(), Args: []any{}}
+		}
+
+		for i, action := range sequence.Action {
+			if action.ID == actionID {
+				sequence.Action = append(sequence.Action[:i], sequence.Action[i+1:]...)
+				break
+			}
+		}
+
+	default:
+		return Response{Status: false, Msg: fmt.Sprintf("Engine: Unknown sequence operation %q", operation), Args: []any{}}
+	}
+
+	(*engine.Sequence_config)[sequenceID] = sequence
+
+	if err := engine.Sequence_config.SaveSequenceConfig(); err != nil {
+		return Response{Status: false, Msg: err.Error(), Args: []any{}}
+	}
+
+	return Response{Status: true, Msg: fmt.Sprintf("Engine: Action %q %sd to sequence %q", actionName, map[string]string{"add": "ad", "remove": "remove"}[operation], sequenceName), Args: []any{}}
+}
+
+func GetSequence(appID uuid.UUID, sequenceName string, engine *Engine) (uuid.UUID, Sequences.Sequence, error) {
+	app, exists := (*engine.App_config)[appID]
+	if !exists {
+		return uuid.Nil, Sequences.Sequence{}, fmt.Errorf("Engine: Application not found")
+	}
+
+	sequenceID, exists := app.Sequences[sequenceName]
+	if !exists {
+		return uuid.Nil, Sequences.Sequence{}, fmt.Errorf("Engine: Sequence %q not found in application", sequenceName)
+	}
+
+	sequence, exists := (*engine.Sequence_config)[sequenceID]
+	if !exists {
+		return uuid.Nil, Sequences.Sequence{}, fmt.Errorf("Engine: Sequence %q not found in sequence config", sequenceName)
+	}
+
+	return sequenceID, sequence, nil
+}
+
+func GetActionID(appID uuid.UUID, actionName string, engine *Engine) (uuid.UUID, error) {
+	app, exists := (*engine.App_config)[appID]
+	if !exists {
+		return uuid.Nil, fmt.Errorf("Engine: Application not found")
+	}
+
+	actionID, exists := app.Actions[actionName]
+	if !exists {
+		return uuid.Nil, fmt.Errorf("Engine: Action %q not found in application", actionName)
+	}
+
+	if _, exists := (*engine.Http_config)[actionID]; exists {
+		return actionID, nil
+	}
+
+	if _, exists := (*engine.Ws_config)[actionID]; exists {
+		return actionID, nil
+	}
+
+	return uuid.Nil, fmt.Errorf("Engine: Action %q not found in action configs", actionName)
+}
+
 func ProcessCd(args []any, engine *Engine) Response {
 	if len(args) < 2 {
 		return Response{Status: false, Msg: "Engine: Expected application name and parent application UUID", Args: []any{}}
@@ -357,7 +482,114 @@ func ProcessCd(args []any, engine *Engine) Response {
 		}
 
 		return Response{Status: true, Msg: "Engine: Application selected successfully", Args: []any{appName, childID.String()}}
+	
 
+	case "action":
+		actionName, ok := args[1].(string)
+		if !ok {
+			return Response{Status: false, Msg: "Engine: Action name must be a string", Args: []any{}}
+		}
+
+		if len(args) < 3 {
+			return Response{Status: false, Msg: "Engine: Missing application UUID", Args: []any{}}
+		}
+
+		appIDString, ok := args[2].(string)
+		if !ok {
+			return Response{Status: false, Msg: "Engine: Application ID must be a UUID string", Args: []any{}}
+		}
+
+		appID, err := uuid.Parse(appIDString)
+		if err != nil {
+			return Response{Status: false, Msg: fmt.Sprintf("Engine: Invalid application UUID: %v", err), Args: []any{}}
+		}
+
+		actionID, err := GetActionID(appID, actionName, engine)
+		if err != nil {
+			return Response{Status: false, Msg: err.Error(), Args: []any{}}
+		}
+
+		if action, exists := (*engine.Http_config)[actionID]; exists {
+			return Response{Status: true, Msg: "Engine: HTTP action options retrieved", Args: []any{"http", action.Opts}}
+		}
+
+		if action, exists := (*engine.Ws_config)[actionID]; exists {
+			return Response{Status: true, Msg: "Engine: WebSocket action options retrieved", Args: []any{"ws", action.Opts}}
+		}
+
+		return Response{Status: false, Msg: fmt.Sprintf("Engine: Action %q is missing from action configs", actionName), Args: []any{}}
+	
+	case "save":
+		if len(args) < 5 {
+			return Response{Status: false, Msg: "Engine: Invalid save arguments", Args: []any{}}
+		}
+
+		actionName, ok := args[1].(string)
+		if !ok {
+			return Response{Status: false, Msg: "Engine: Invalid action name", Args: []any{}}
+		}
+
+		appIDStr, ok := args[2].(string)
+		if !ok {
+			return Response{Status: false, Msg: "Engine: Invalid application ID", Args: []any{}}
+		}
+
+		appID, err := uuid.Parse(appIDStr)
+		if err != nil {
+			return Response{Status: false, Msg: "Engine: Invalid application ID", Args: []any{}}
+		}
+
+		actionType, ok := args[3].(string)
+		if !ok {
+			return Response{Status: false, Msg: "Engine: Invalid action type", Args: []any{}}
+		}
+
+		optsData, err := json.Marshal(args[4])
+		if err != nil {
+			return Response{Status: false, Msg: "Engine: Failed to encode action options", Args: []any{}}
+		}
+
+		actionID, err := GetActionID(appID, actionName, engine)
+		if err != nil {
+			return Response{Status: false, Msg: err.Error(), Args: []any{}}
+		}
+
+		switch actionType {
+		case "http":
+			action, exists := (*engine.Http_config)[actionID]
+			if !exists {
+				return Response{Status: false, Msg: "Engine: HTTP action not found", Args: []any{}}
+			}
+
+			if err := json.Unmarshal(optsData, &action.Opts); err != nil {
+				return Response{Status: false, Msg: "Engine: Invalid HTTP action options", Args: []any{}}
+			}
+
+			(*engine.Http_config)[actionID] = action
+			if err := engine.Http_config.SaveHttpActionsConfig(); err != nil {
+				return Response{Status: false, Msg: err.Error(), Args: []any{}}
+			}
+
+		case "ws":
+			action, exists := (*engine.Ws_config)[actionID]
+			if !exists {
+				return Response{Status: false, Msg: "Engine: WebSocket action not found", Args: []any{}}
+			}
+
+			if err := json.Unmarshal(optsData, &action.Opts); err != nil {
+				return Response{Status: false, Msg: "Engine: Invalid WebSocket action options", Args: []any{}}
+			}
+
+			(*engine.Ws_config)[actionID] = action
+			if err := engine.Ws_config.SaveWSActionsConfig(); err != nil {
+				return Response{Status: false, Msg: err.Error(), Args: []any{}}
+			}
+
+		default:
+			return Response{Status: false, Msg: "Engine: Unknown action type", Args: []any{}}
+		}
+
+		return Response{Status: true, Msg: "Engine: Action options saved successfully", Args: []any{}}
 	default:
 		return Response{Status: false, Msg: "Engine: Unknown cd command", Args: []any{}}
 	}
@@ -403,31 +635,46 @@ func ProcessExecute(args []any, engine *Engine) Response {
 
 	switch operation {
 	case "action":
-		if len(args) < 2 {
-			return Response{Status: false, Msg: "Engine: Missing action type", Args: []any{}}
+		if len(args) < 3 {
+			return Response{Status: false, Msg: "Engine: Missing action name or application ID", Args: []any{}}
 		}
 
-		actionType, ok := args[1].(string)
+		actionName, ok := args[1].(string)
 		if !ok {
-			return Response{Status: false, Msg: "Engine: Action type must be a string", Args: []any{}}
+			return Response{Status: false, Msg: "Engine: Action name must be a string", Args: []any{}}
 		}
 
-		switch actionType {
-			case "http":
-				// Handle HTTP action execution
-				return Response{Status: true, Msg: "Engine: HTTP action execution", Args: []any{}}
+		appIDStr, ok := args[2].(string)
+		if !ok {
+			return Response{Status: false, Msg: "Engine: Application ID must be a string", Args: []any{}}
+		}
 
-			case "ws":
-				// Handle WebSocket action execution
-				return Response{Status: true, Msg: "Engine: WebSocket action execution", Args: []any{}}
+		appID, err := uuid.Parse(appIDStr)
+		if err != nil {
+			return Response{Status: false, Msg: "Engine: Invalid application ID", Args: []any{}}
+		}
 
-			case "":
-				return Response{Status: false, Msg: "Engine: Action type is empty", Args: []any{}}
+		actionID, err := GetActionID(appID, actionName, engine)
+		if err != nil {
+			return Response{Status: false, Msg: err.Error(), Args: []any{}}
+		}
 
-			default:
-				return Response{Status: false, Msg: fmt.Sprintf("Engine: Unknown action type %q", actionType), Args: []any{}}
+		engine.Tester.SetUpTester()
+
+		if action, exists := (*engine.Http_config)[actionID]; exists {
+			actionResponse := engine.Tester.ExecuteHTTPAction(action, actionID)
+			if actionResponse == nil {
+				return Response{Status: false, Msg: "Engine: HTTP action execution failed", Args: []any{}}
 			}
+			return Response{Status: true,Msg:    "Engine: HTTP action executed successfully",Args:   []any{actionResponse},}
+		}
 
+		// if action, exists := (*engine.Ws_config)[actionID]; exists {
+		// 	engine.Tester.ExecuteWSAction(&action, actionID)
+		// 	return Response{Status: true, Msg: "Engine: WebSocket action executed successfully", Args: []any{}}
+		// }
+
+		return Response{Status: false, Msg: "Engine: Action not found in action configs", Args: []any{}}
 	case "sequence":
 		// Handle sequence execution
 		return Response{Status: true, Msg: "Engine: Sequence execution", Args: []any{}}

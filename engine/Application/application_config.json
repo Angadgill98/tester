@@ -1,24 +1,24 @@
 {
-    "8e07b5c4-9c4b-44ab-8051-1c6f69518c2b": {
-        "application_id": "8e07b5c4-9c4b-44ab-8051-1c6f69518c2b",
-        "parent_id": "d8bdb32c-d8e8-42ee-90b4-e557d1833d44",
-        "name": "test",
-        "actions": {
-            "asdasd": "24d7932f-20e7-44d2-8866-624fbbb5a62e"
-        },
-        "sequences": {
-            "seq": "43709724-573f-4089-9e3c-370bc874b1d8"
-        },
-        "children": {}
-    },
-    "d8bdb32c-d8e8-42ee-90b4-e557d1833d44": {
-        "application_id": "d8bdb32c-d8e8-42ee-90b4-e557d1833d44",
+    "621b4a02-a259-426a-830d-52daf0c03cdb": {
+        "application_id": "621b4a02-a259-426a-830d-52daf0c03cdb",
         "parent_id": "00000000-0000-0000-0000-000000000000",
         "name": "GLOBAL",
         "actions": {},
         "sequences": {},
         "children": {
-            "test": "8e07b5c4-9c4b-44ab-8051-1c6f69518c2b"
+            "test": "76bc1b6c-15a3-4c20-a0b5-3b2e1bf1a29a"
         }
+    },
+    "76bc1b6c-15a3-4c20-a0b5-3b2e1bf1a29a": {
+        "application_id": "76bc1b6c-15a3-4c20-a0b5-3b2e1bf1a29a",
+        "parent_id": "621b4a02-a259-426a-830d-52daf0c03cdb",
+        "name": "test",
+        "actions": {
+            "act": "e61bcf51-9681-4329-9007-0469e7d2fb8d"
+        },
+        "sequences": {
+            "seq": "805306be-848e-45c8-8efe-ed96d4080d80"
+        },
+        "children": {}
     }
 }

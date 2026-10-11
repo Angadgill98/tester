@@ -17,7 +17,7 @@ import (
 
 type Tester struct {
 	Client         http.Client
-	WebSocket      *websocket.Conn
+	WebSocket      map[uuid.UUID]*websocket.Conn
 	Prev_res       ActionResponse
 	Sequence_state SequnceState
 }
@@ -32,7 +32,7 @@ func CreateTesterObj() Tester {
 		Client: http.Client{
 			Jar: jar,
 		},
-		WebSocket: nil,
+		WebSocket: make(map[uuid.UUID]*websocket.Conn),
 		Prev_res:  ActionResponse{},
 		Sequence_state: SequnceState{
 			State:      make(map[Action_id]map[Action_name]ActionResponse),
@@ -120,8 +120,18 @@ func (tester *Tester) ExecuteHTTPAction(action *Actions.Http_action,action_id uu
 
 	tester.Prev_res = *response
 
-	tester.Sequence_state.State[Action_id(action_id)][Action_name(action.Name)] = *response
+	actionID := Action_id(action_id)
+	actionName := Action_name(action.Name)
 
+	if tester.Sequence_state.State == nil {
+		tester.Sequence_state.State = make(map[Action_id]map[Action_name]ActionResponse)
+	}
+
+	if tester.Sequence_state.State[actionID] == nil {
+		tester.Sequence_state.State[actionID] = make(map[Action_name]ActionResponse)
+	}
+
+	tester.Sequence_state.State[actionID][actionName] = *response
 
 	return response
 }
@@ -129,21 +139,23 @@ func (tester *Tester) ExecuteHTTPAction(action *Actions.Http_action,action_id uu
 func (tester *Tester) ExecuteSequence(sequence Sequences.Sequence, http_action_config *Actions.Http_Actions_config, ws_action_config *Actions.WS_Actions_config) {
 	tester.SetUpTester()
 
-	for _, actionID := range sequence.Http {
-		action, exists := (*http_action_config)[actionID]
-		if !exists {
-			continue
-		}
-		_=tester.ExecuteHTTPAction(action,actionID)
-	}
+	for _, action := range sequence.Action {
+		switch action.Type {
+		case "http":
+			httpAction, exists := (*http_action_config)[action.ID]
+			if !exists {
+				continue
+			}
+			_ = tester.ExecuteHTTPAction(httpAction, action.ID)
 
-	// for _, actionID := range sequence.Ws {
-	// 	action, exists := (*ws_action_config)[actionID]
-	// 	if !exists {
-	// 		continue
-	// 	}
-	// 	tester.ExecuteWSAction(action)
-	// }
+		// case "ws":
+		// 	wsAction, exists := (*ws_action_config)[action.ID]
+		// 	if !exists {
+		// 		continue
+		// 	}
+		// 	tester.ExecuteWSAction(&wsAction, action.ID)
+		}
+	}
 }
 
 // func (tester *Tester) ExecuteWSAction(action Actions.WsAction) *ActionResponse {

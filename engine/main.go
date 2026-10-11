@@ -4,6 +4,7 @@ import (
 	"engine/Actions"
 	"engine/Application"
 	"engine/Sequences"
+	tester "engine/Tester"
 	"fmt"
 	"os"
 
@@ -44,7 +45,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	engine:=CreateEngine(app_config, &http_config, &ws_config, sequences_config)
+	tester:=tester.CreateTesterObj();
+
+	engine:=CreateEngine(app_config, &http_config, &ws_config, sequences_config,&tester)
 
 	StartSocket(&engine)
 }
