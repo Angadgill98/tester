@@ -3,14 +3,14 @@ package tester
 import (
 	"net/http"
 
-	"github.com/google/uuid"
 )
 
-type Action_id uuid.UUID
+
+
 type Action_name string
 
 type SequnceState struct {
-	State map[Action_id]map[Action_name]ActionResponse
+	State map[Action_name][]ActionResponse
 	CustomData map[string]any
 }
 

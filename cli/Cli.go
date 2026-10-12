@@ -281,6 +281,28 @@ func (cli *CLI) ProcessExecute(args []string) {
 		for _, arg := range response.Args {
 			fmt.Printf("%+v\n", arg)
 		}
+
+	case "sequence":
+		if len(args) < 2 {
+			fmt.Println("CLI: Sequence name is missing")
+			return
+		}
+
+		sequenceName := strings.TrimSpace(strings.ReplaceAll(strings.Join(args[1:], " "), " ", "_"))
+		appID := global.CurrentAppID
+
+		payload := []any{"sequence", sequenceName, appID}
+		response := cli.SendPayload("execute", payload)
+
+		if !response.Status {
+			fmt.Println(response.Msg)
+			return
+		}
+
+		fmt.Println(response.Msg)
+		for _, arg := range response.Args {
+			fmt.Printf("%+v\n", arg)
+		}
 	default:
 		fmt.Printf("CLI: Unknown execute operation %q\n", operation)
 	}

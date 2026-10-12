@@ -29,13 +29,11 @@ func CreateTesterObj() Tester {
 	}
 
 	return Tester{
-		Client: http.Client{
-			Jar: jar,
-		},
+		Client: http.Client{Jar: jar},
 		WebSocket: make(map[uuid.UUID]*websocket.Conn),
 		Prev_res:  ActionResponse{},
 		Sequence_state: SequnceState{
-			State:      make(map[Action_id]map[Action_name]ActionResponse),
+			State:      make(map[Action_name][]ActionResponse),
 			CustomData: make(map[string]any),
 		},
 	}
@@ -51,6 +49,14 @@ func (tester *Tester) SetUpTester() {
 	// var res = *action.Executor(&tester.Client, &tester.Prev_res, &tester.Sequence_state)
 	// return  res
 // }
+
+
+func (state SequnceState) ToJSON() map[string]any {
+	return map[string]any{
+		"state":       state.State,
+		"custom_data": state.CustomData,
+	}
+}
 
 func (tester *Tester) ShowState() {
 	fmt.Println()
@@ -120,23 +126,12 @@ func (tester *Tester) ExecuteHTTPAction(action *Actions.Http_action,action_id uu
 
 	tester.Prev_res = *response
 
-	actionID := Action_id(action_id)
-	actionName := Action_name(action.Name)
-
-	if tester.Sequence_state.State == nil {
-		tester.Sequence_state.State = make(map[Action_id]map[Action_name]ActionResponse)
-	}
-
-	if tester.Sequence_state.State[actionID] == nil {
-		tester.Sequence_state.State[actionID] = make(map[Action_name]ActionResponse)
-	}
-
-	tester.Sequence_state.State[actionID][actionName] = *response
+	
 
 	return response
 }
 
-func (tester *Tester) ExecuteSequence(sequence Sequences.Sequence, http_action_config *Actions.Http_Actions_config, ws_action_config *Actions.WS_Actions_config) {
+func (tester *Tester) ExecuteSequence(sequence Sequences.Sequence, http_action_config *Actions.Http_Actions_config, ws_action_config *Actions.WS_Actions_config) map[string]any {
 	tester.SetUpTester()
 
 	for _, action := range sequence.Action {
@@ -146,7 +141,22 @@ func (tester *Tester) ExecuteSequence(sequence Sequences.Sequence, http_action_c
 			if !exists {
 				continue
 			}
-			_ = tester.ExecuteHTTPAction(httpAction, action.ID)
+
+			actionResponse := tester.ExecuteHTTPAction(httpAction, action.ID)
+			if actionResponse == nil {
+				continue
+			}
+
+			actionName := Action_name(httpAction.Name)
+
+			if tester.Sequence_state.State == nil {
+				tester.Sequence_state.State = make(map[Action_name][]ActionResponse)
+			}
+
+			tester.Sequence_state.State[actionName] = append(
+				tester.Sequence_state.State[actionName],
+				*actionResponse,
+			)
 
 		// case "ws":
 		// 	wsAction, exists := (*ws_action_config)[action.ID]
@@ -156,8 +166,9 @@ func (tester *Tester) ExecuteSequence(sequence Sequences.Sequence, http_action_c
 		// 	tester.ExecuteWSAction(&wsAction, action.ID)
 		}
 	}
-}
 
+	return tester.Sequence_state.ToJSON()
+}
 // func (tester *Tester) ExecuteWSAction(action Actions.WsAction) *ActionResponse {
 // 	executor := action_obj.WS.Config["ws"][action.Name]
 

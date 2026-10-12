@@ -675,9 +675,39 @@ func ProcessExecute(args []any, engine *Engine) Response {
 		// }
 
 		return Response{Status: false, Msg: "Engine: Action not found in action configs", Args: []any{}}
+	
 	case "sequence":
-		// Handle sequence execution
-		return Response{Status: true, Msg: "Engine: Sequence execution", Args: []any{}}
+		if len(args) < 3 {
+			return Response{Status: false, Msg: "Engine: Missing sequence name or application ID", Args: []any{}}
+		}
+
+		sequenceName, ok := args[1].(string)
+		if !ok {
+			return Response{Status: false, Msg: "Engine: Sequence name must be a string", Args: []any{}}
+		}
+
+		appIDStr, ok := args[2].(string)
+		if !ok {
+			return Response{Status: false, Msg: "Engine: Application ID must be a string", Args: []any{}}
+		}
+
+		appID, err := uuid.Parse(appIDStr)
+		if err != nil {
+			return Response{Status: false, Msg: "Engine: Invalid application ID", Args: []any{}}
+		}
+
+		_, sequence, err := GetSequence(appID, sequenceName, engine)
+		if err != nil {
+			return Response{Status: false, Msg: err.Error(), Args: []any{}}
+		}
+
+		sequenceState := engine.Tester.ExecuteSequence(sequence, engine.Http_config, engine.Ws_config)
+
+		return Response{
+			Status: true,
+			Msg:    "Engine: Sequence executed successfully",
+			Args:   []any{sequenceState},
+		}
 
 	case "":
 		return Response{Status: false, Msg: "Engine: Execute operation is empty", Args: []any{}}
@@ -686,4 +716,5 @@ func ProcessExecute(args []any, engine *Engine) Response {
 		return Response{Status: false, Msg: fmt.Sprintf("Engine: Unknown execute operation %q", operation), Args: []any{}}
 	}
 }
+
 
