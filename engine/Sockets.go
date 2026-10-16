@@ -8,14 +8,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"engine/Actions"
 	"engine/Global"
-	"engine/Sequences"
 
-	"github.com/google/uuid"
 )
 
-func StartSocket(engine *Engine) {
+func StartSocket() {
 	socketPath := Global.GlobalConfig.SocketPath
 
 	if err := os.MkdirAll(filepath.Dir(socketPath), 0755); err != nil {
@@ -38,48 +35,30 @@ func StartSocket(engine *Engine) {
 
 	fmt.Printf("Listening on socket: %s\n", socketPath)
 
-	if err := ListenForClients(listener,engine); err != nil {
+	if err := ListenForClients(listener); err != nil {
 		fmt.Printf("Socket listener stopped: %v\n", err)
 	}
 
 
 }
 
-func ListenForClients(listener net.Listener, engine *Engine) error {
+func ListenForClients(listener net.Listener) error {
 	conn, err := listener.Accept()
 	if err != nil {
 		return fmt.Errorf("failed to accept client: %w", err)
 	}
 
-	if err := SendGlobalAppID(conn, engine); err != nil {
-		conn.Close()
-		return fmt.Errorf("failed to send GLOBAL application ID: %w", err)
-	}
-
-	HandleClient(conn, engine)
+	HandleClient(conn)
 	return nil
 }
 
-func SendGlobalAppID(conn net.Conn, engine *Engine) error {
-	for id, app := range *engine.App_config {
-		if app.Name == "GLOBAL" {
-			return SendResponse(conn, Response{
-				Status: true,
-				Msg:    "GLOBAL application ID",
-				Args:   []any{app.Name, id.String()},
-			})
-		}
-	}
-
-	return fmt.Errorf("GLOBAL application does not exist")
-}
 
 type Command struct {
 	Command string `json:"command"`
 	Args    []any  `json:"args"`
 }
 
-func HandleClient(conn net.Conn, engine *Engine) {
+func HandleClient(conn net.Conn) {
 	defer conn.Close()
 
 	fmt.Printf("Client connected: %s\n", conn.RemoteAddr())
@@ -105,7 +84,7 @@ func HandleClient(conn net.Conn, engine *Engine) {
 
 			fmt.Printf("Engine: Command: %s\n", command.Command)
 			fmt.Printf("Engine: Args: %v\n", command.Args)
-			response:=HandleCommand(command, engine)
+			response:=HandleCommand(command)
 			// Process command using engine here.
 			
 
@@ -117,22 +96,22 @@ func HandleClient(conn net.Conn, engine *Engine) {
 }
 
 
-func HandleCommand(command Command, engine *Engine) Response {
+func HandleCommand(command Command) Response {
 	switch command.Command {
 	case "create":
-		response:=ProcessCreate(command.Args, engine)
+		response:=ProcessCreate(command.Args)
 		return response
 	case "sequence":
-		response:=ProcessSequence(command.Args, engine)
+		response:=ProcessSequence(command.Args)
 		return response
 	case "execute":
-		response:=ProcessExecute(command.Args, engine)
+		response:=ProcessExecute(command.Args)
 		return response
 	case "cd":
-		response:=ProcessCd(command.Args,engine)
+		response:=ProcessCd(command.Args)
 		return response
 	case "ls":
-		response:=ProcessLs(command.Args,engine)
+		response:=ProcessLs(command.Args)
 		return response
 	default:
 		return Response{
@@ -144,11 +123,7 @@ func HandleCommand(command Command, engine *Engine) Response {
 	}
 }
 
-type Response struct {
-	Status bool   `json:"status"`
-	Msg    string `json:"msg"`
-	Args   []any  `json:"args"`
-}
+
 
 func SendResponse(conn net.Conn, responseObj Response) error {
 	data, err := json.Marshal(responseObj)
@@ -165,560 +140,115 @@ func SendResponse(conn net.Conn, responseObj Response) error {
 }
 
 
-func ProcessCreate(args []any, engine *Engine) Response {
-	if len(args) == 0 {
-		return Response{Status: false, Msg: "Engine: Missing create operation", Args: []any{}}
-	}
-
-	operation, ok := args[0].(string)
-	if !ok {
-		return Response{Status: false, Msg: "Engine: Create operation must be a string", Args: []any{}}
-	}
-
-	switch operation {
-		case "app":
-			if len(args) < 3 {
-				return Response{Status: false, Msg: "Engine: Expected app name and parent application UUID", Args: []any{}}
-			}
-
-			appName, ok := args[1].(string)
-			if !ok {
-				return Response{Status: false, Msg: "Engine: App name must be a string", Args: []any{}}
-			}
-
-			parentIDString, ok := args[2].(string)
-			if !ok {
-				return Response{Status: false, Msg: "Engine: Parent application ID must be a UUID string", Args: []any{}}
-			}
-
-			parentID, err := uuid.Parse(parentIDString)
-			if err != nil {
-				return Response{Status: false, Msg: fmt.Sprintf("Engine: Invalid parent application UUID: %v", err), Args: []any{}}
-			}
-
-			if err := engine.CreateApp(appName, parentID); err != nil {
-				return Response{Status: false, Msg: err.Error(), Args: []any{}}
-			}
-
-			return Response{Status: true, Msg: fmt.Sprintf("Engine: Application %q created successfully", appName), Args: []any{}}
-
-		case "action":
-			if len(args) < 4 {
-				return Response{Status: false, Msg: "Engine: Expected action name, application UUID, and action options", Args: []any{}}
-			}
-
-			actionName, ok := args[1].(string)
-			if !ok {
-				return Response{Status: false, Msg: "Engine: Action name must be a string", Args: []any{}}
-			}
-
-			appIDString, ok := args[2].(string)
-			if !ok {
-				return Response{Status: false, Msg: "Engine: Application ID must be a UUID string", Args: []any{}}
-			}
-
-			appID, err := uuid.Parse(appIDString)
-			if err != nil {
-				return Response{Status: false, Msg: fmt.Sprintf("Engine: Invalid application UUID: %v", err), Args: []any{}}
-			}
-
-			optsJSON, err := json.Marshal(args[3])
-			if err != nil {
-				return Response{Status: false, Msg: fmt.Sprintf("Engine: Failed to encode action options: %v", err), Args: []any{}}
-			}
-
-			var rawOpts struct {
-				ActionType string          `json:"action_type"`
-				HTTP       json.RawMessage `json:"http"`
-				WS         json.RawMessage `json:"ws"`
-			}
-
-			if err := json.Unmarshal(optsJSON, &rawOpts); err != nil {
-				return Response{Status: false, Msg: fmt.Sprintf("Engine: Failed to decode action options: %v", err), Args: []any{}}
-			}
-
-			var opts any
-
-			switch rawOpts.ActionType {
-			case "http":
-				var httpOpts Actions.HTTP_opts
-				if err := json.Unmarshal(rawOpts.HTTP, &httpOpts); err != nil {
-					return Response{Status: false, Msg: fmt.Sprintf("Engine: Invalid HTTP action options: %v", err), Args: []any{}}
-				}
-				opts = httpOpts
-
-			case "ws":
-				var wsOpts Actions.WS_opts
-				if err := json.Unmarshal(rawOpts.WS, &wsOpts); err != nil {
-					return Response{Status: false, Msg: fmt.Sprintf("Engine: Invalid WebSocket action options: %v", err), Args: []any{}}
-				}
-				opts = wsOpts
-
-			default:
-				return Response{Status: false, Msg: fmt.Sprintf("Engine: Unsupported action type %q", rawOpts.ActionType), Args: []any{}}
-			}
-
-			if err := engine.CreateAction(appID, actionName, opts); err != nil {
-				return Response{Status: false, Msg: err.Error(), Args: []any{}}
-			}
-
-			return Response{Status: true, Msg: fmt.Sprintf("Engine: Action %q created successfully", actionName), Args: []any{}}
-		
-		case "sequence":
-			if len(args) < 3 {
-				return Response{Status: false, Msg: "Engine: Expected sequence name and application UUID", Args: []any{}}
-			}
-
-			sequenceName, ok := args[1].(string)
-			if !ok {
-				return Response{Status: false, Msg: "Engine: Sequence name must be a string", Args: []any{}}
-			}
-
-			appIDString, ok := args[2].(string)
-			if !ok {
-				return Response{Status: false, Msg: "Engine: Application ID must be a UUID string", Args: []any{}}
-			}
-
-			appID, err := uuid.Parse(appIDString)
-			if err != nil {
-				return Response{Status: false, Msg: fmt.Sprintf("Engine: Invalid application UUID: %v", err), Args: []any{}}
-			}
-
-			sequence := Sequences.CreateSequence(sequenceName)
-
-			(*engine.Sequence_config)[sequence.ID] = *sequence
-
-			app, exists := (*engine.App_config)[appID]
-			if !exists {
-				delete(*engine.Sequence_config, sequence.ID)
-				return Response{Status: false, Msg: "Engine: Application not found", Args: []any{}}
-			}
-
-			app.Sequences[sequenceName] = sequence.ID
-
-			if err := engine.Sequence_config.SaveSequenceConfig(); err != nil {
-				delete(*engine.Sequence_config, sequence.ID)
-				delete(app.Sequences, sequenceName)
-				return Response{Status: false, Msg: err.Error(), Args: []any{}}
-			}
-
-			if err := engine.App_config.SaveAppConfig(); err != nil {
-				delete(*engine.Sequence_config, sequence.ID)
-				delete(app.Sequences, sequenceName)
-				return Response{Status: false, Msg: err.Error(), Args: []any{}}
-			}
-
-			return Response{Status: true, Msg: fmt.Sprintf("Engine: Sequence %q created successfully", sequenceName), Args: []any{}}
-			
-
-		
-		default:
-			return Response{Status: false, Msg: "Engine: Unknown create command", Args: []any{}}
-	}
-}
-
-func ProcessSequence(args []any, engine *Engine) Response {
-	if len(args) < 4 {
-		return Response{Status: false, Msg: "Engine: Expected operation, sequence name, action name, and application UUID", Args: []any{}}
-	}
-
-	operation, ok := args[0].(string)
-	if !ok {
-		return Response{Status: false, Msg: "Engine: Sequence operation must be a string", Args: []any{}}
-	}
-
-	sequenceName, ok := args[1].(string)
-	if !ok {
-		return Response{Status: false, Msg: "Engine: Sequence name must be a string", Args: []any{}}
-	}
-
-	actionName, ok := args[2].(string)
-	if !ok {
-		return Response{Status: false, Msg: "Engine: Action name must be a string", Args: []any{}}
-	}
-
-	appIDString, ok := args[3].(string)
-	if !ok {
-		return Response{Status: false, Msg: "Engine: Application ID must be a UUID string", Args: []any{}}
-	}
-
-	appID, err := uuid.Parse(appIDString)
+func ProcessCreate(args []any) Response {
+	operation, err := GetFirstArg(args)
 	if err != nil {
-		return Response{Status: false, Msg: fmt.Sprintf("Engine: Invalid application UUID: %v", err), Args: []any{}}
-	}
-
-	sequenceID, sequence, err := GetSequence(appID, sequenceName, engine)
-	if err != nil {
-		return Response{Status: false, Msg: err.Error(), Args: []any{}}
-	}
-
-	switch operation {
-	case "add":
-		actionID, err := GetActionID(appID, actionName, engine)
-		if err != nil {
-			return Response{Status: false, Msg: err.Error(), Args: []any{}}
-		}
-
-		actionType := "ws"
-		if _, exists := (*engine.Http_config)[actionID]; exists {
-			actionType = "http"
-		}
-
-		sequence.Action = append(sequence.Action, Sequences.Action{
-			Type: actionType,
-			ID:   actionID,
-		})
-
-	case "remove":
-		actionID, err := GetActionID(appID, actionName, engine)
-		if err != nil {
-			return Response{Status: false, Msg: err.Error(), Args: []any{}}
-		}
-
-		for i, action := range sequence.Action {
-			if action.ID == actionID {
-				sequence.Action = append(sequence.Action[:i], sequence.Action[i+1:]...)
-				break
-			}
-		}
-
-	default:
-		return Response{Status: false, Msg: fmt.Sprintf("Engine: Unknown sequence operation %q", operation), Args: []any{}}
-	}
-
-	(*engine.Sequence_config)[sequenceID] = sequence
-
-	if err := engine.Sequence_config.SaveSequenceConfig(); err != nil {
-		return Response{Status: false, Msg: err.Error(), Args: []any{}}
-	}
-
-	return Response{Status: true, Msg: fmt.Sprintf("Engine: Action %q %sd to sequence %q", actionName, map[string]string{"add": "ad", "remove": "remove"}[operation], sequenceName), Args: []any{}}
-}
-
-func GetSequence(appID uuid.UUID, sequenceName string, engine *Engine) (uuid.UUID, Sequences.Sequence, error) {
-	app, exists := (*engine.App_config)[appID]
-	if !exists {
-		return uuid.Nil, Sequences.Sequence{}, fmt.Errorf("Engine: Application not found")
-	}
-
-	sequenceID, exists := app.Sequences[sequenceName]
-	if !exists {
-		return uuid.Nil, Sequences.Sequence{}, fmt.Errorf("Engine: Sequence %q not found in application", sequenceName)
-	}
-
-	sequence, exists := (*engine.Sequence_config)[sequenceID]
-	if !exists {
-		return uuid.Nil, Sequences.Sequence{}, fmt.Errorf("Engine: Sequence %q not found in sequence config", sequenceName)
-	}
-
-	return sequenceID, sequence, nil
-}
-
-func GetActionID(appID uuid.UUID, actionName string, engine *Engine) (uuid.UUID, error) {
-	app, exists := (*engine.App_config)[appID]
-	if !exists {
-		return uuid.Nil, fmt.Errorf("Engine: Application not found")
-	}
-
-	actionID, exists := app.Actions[actionName]
-	if !exists {
-		return uuid.Nil, fmt.Errorf("Engine: Action %q not found in application", actionName)
-	}
-
-	if _, exists := (*engine.Http_config)[actionID]; exists {
-		return actionID, nil
-	}
-
-	if _, exists := (*engine.Ws_config)[actionID]; exists {
-		return actionID, nil
-	}
-
-	return uuid.Nil, fmt.Errorf("Engine: Action %q not found in action configs", actionName)
-}
-
-func ProcessCd(args []any, engine *Engine) Response {
-	if len(args) < 2 {
-		return Response{Status: false, Msg: "Engine: Expected application name and parent application UUID", Args: []any{}}
-	}
-
-	operation, ok := args[0].(string)
-	if !ok {
-		return Response{Status: false, Msg: "Engine: CD operation must be a string", Args: []any{}}
+		return *err
 	}
 
 	switch operation {
 	case "app":
-		appName, ok := args[1].(string)
-		if !ok {
-			return Response{Status: false, Msg: "Engine: Application name must be a string", Args: []any{}}
-		}
-
-		if len(args) < 3 {
-			return Response{Status: false, Msg: "Engine: Missing parent application UUID", Args: []any{}}
-		}
-
-		parentIDString, ok := args[2].(string)
-		if !ok {
-			return Response{Status: false, Msg: "Engine: Parent application ID must be a UUID string", Args: []any{}}
-		}
-
-		parentID, err := uuid.Parse(parentIDString)
-		if err != nil {
-			return Response{Status: false, Msg: fmt.Sprintf("Engine: Invalid parent application UUID: %v", err), Args: []any{}}
-		}
-
-		parentApp, exists := (*engine.App_config)[parentID]
-		if !exists {
-			return Response{Status: false, Msg: fmt.Sprintf("Engine: Parent application with ID %q does not exist", parentIDString), Args: []any{}}
-		}
-
-		childID, exists := parentApp.Children[appName]
-		if !exists {
-			return Response{Status: false, Msg: fmt.Sprintf("Engine: Application %q does not exist under parent %q", appName, parentApp.Name), Args: []any{}}
-		}
-
-		if _, exists := (*engine.App_config)[childID]; !exists {
-			return Response{Status: false, Msg: fmt.Sprintf("Engine: Application %q references a missing application ID %q", appName, childID), Args: []any{}}
-		}
-
-		return Response{Status: true, Msg: "Engine: Application selected successfully", Args: []any{appName, childID.String()}}
-	
 
 	case "action":
-		actionName, ok := args[1].(string)
-		if !ok {
-			return Response{Status: false, Msg: "Engine: Action name must be a string", Args: []any{}}
-		}
 
-		if len(args) < 3 {
-			return Response{Status: false, Msg: "Engine: Missing application UUID", Args: []any{}}
-		}
+	case "sequence":
 
-		appIDString, ok := args[2].(string)
-		if !ok {
-			return Response{Status: false, Msg: "Engine: Application ID must be a UUID string", Args: []any{}}
-		}
-
-		appID, err := uuid.Parse(appIDString)
-		if err != nil {
-			return Response{Status: false, Msg: fmt.Sprintf("Engine: Invalid application UUID: %v", err), Args: []any{}}
-		}
-
-		actionID, err := GetActionID(appID, actionName, engine)
-		if err != nil {
-			return Response{Status: false, Msg: err.Error(), Args: []any{}}
-		}
-
-		if action, exists := (*engine.Http_config)[actionID]; exists {
-			return Response{Status: true, Msg: "Engine: HTTP action options retrieved", Args: []any{"http", action.Opts}}
-		}
-
-		if action, exists := (*engine.Ws_config)[actionID]; exists {
-			return Response{Status: true, Msg: "Engine: WebSocket action options retrieved", Args: []any{"ws", action.Opts}}
-		}
-
-		return Response{Status: false, Msg: fmt.Sprintf("Engine: Action %q is missing from action configs", actionName), Args: []any{}}
-	
-	case "save":
-		if len(args) < 5 {
-			return Response{Status: false, Msg: "Engine: Invalid save arguments", Args: []any{}}
-		}
-
-		actionName, ok := args[1].(string)
-		if !ok {
-			return Response{Status: false, Msg: "Engine: Invalid action name", Args: []any{}}
-		}
-
-		appIDStr, ok := args[2].(string)
-		if !ok {
-			return Response{Status: false, Msg: "Engine: Invalid application ID", Args: []any{}}
-		}
-
-		appID, err := uuid.Parse(appIDStr)
-		if err != nil {
-			return Response{Status: false, Msg: "Engine: Invalid application ID", Args: []any{}}
-		}
-
-		actionType, ok := args[3].(string)
-		if !ok {
-			return Response{Status: false, Msg: "Engine: Invalid action type", Args: []any{}}
-		}
-
-		optsData, err := json.Marshal(args[4])
-		if err != nil {
-			return Response{Status: false, Msg: "Engine: Failed to encode action options", Args: []any{}}
-		}
-
-		actionID, err := GetActionID(appID, actionName, engine)
-		if err != nil {
-			return Response{Status: false, Msg: err.Error(), Args: []any{}}
-		}
-
-		switch actionType {
-		case "http":
-			action, exists := (*engine.Http_config)[actionID]
-			if !exists {
-				return Response{Status: false, Msg: "Engine: HTTP action not found", Args: []any{}}
-			}
-
-			if err := json.Unmarshal(optsData, &action.Opts); err != nil {
-				return Response{
-					Status: false,
-					Msg:    fmt.Sprintf("Engine: Invalid HTTP action options: %v", err),
-					Args:   []any{},
-				}
-			}
-
-			(*engine.Http_config)[actionID] = action
-			if err := engine.Http_config.SaveHttpActionsConfig(); err != nil {
-				return Response{Status: false, Msg: err.Error(), Args: []any{}}
-			}
-
-		case "ws":
-			action, exists := (*engine.Ws_config)[actionID]
-			if !exists {
-				return Response{Status: false, Msg: "Engine: WebSocket action not found", Args: []any{}}
-			}
-
-			if err := json.Unmarshal(optsData, &action.Opts); err != nil {
-				return Response{Status: false, Msg: "Engine: Invalid WebSocket action options", Args: []any{}}
-			}
-
-			(*engine.Ws_config)[actionID] = action
-			if err := engine.Ws_config.SaveWSActionsConfig(); err != nil {
-				return Response{Status: false, Msg: err.Error(), Args: []any{}}
-			}
-
-		default:
-			return Response{Status: false, Msg: "Engine: Unknown action type", Args: []any{}}
-		}
-
-		return Response{Status: true, Msg: "Engine: Action options saved successfully", Args: []any{}}
 	default:
-		return Response{Status: false, Msg: "Engine: Unknown cd command", Args: []any{}}
+		return Response{
+			Status: false,
+			Msg:    "Engine :Invalid operation.",
+		}
 	}
+
+	return Response{Status: true}
 }
 
-func ProcessLs(args []any, engine *Engine) Response {
-	if len(args) == 0 {
-		return Response{Status: false, Msg: "Engine: Missing application UUID", Args: []any{}}
-	}
-
-	appIDString, ok := args[0].(string)
-	if !ok {
-		return Response{Status: false, Msg: "Engine: Application ID must be a UUID string", Args: []any{}}
-	}
-
-	appID, err := uuid.Parse(appIDString)
+func ProcessSequence(args []any) Response {
+	operation, err := GetFirstArg(args)
 	if err != nil {
-		return Response{Status: false, Msg: fmt.Sprintf("Engine: Invalid application UUID: %v", err), Args: []any{}}
+		return *err
 	}
 
-	app, exists := (*engine.App_config)[appID]
-	if !exists {
-		return Response{Status: false, Msg: fmt.Sprintf("Engine: Application with ID %q does not exist", appIDString), Args: []any{}}
+	switch operation {
+	case "add":
+	case "remove":
+	case "reorder":
+	case "exchange":
+	default:
+		return Response{
+			Status: false,
+			Msg:    "Invalid operation. Expected add, remove, reorder, or exchange",
+		}
 	}
 
-	children := make([]any, 0, len(app.Children))
-	for name := range app.Children {
-		children = append(children, name)
-	}
-
-	return Response{Status: true, Msg: "Engine: Children retrieved successfully", Args: children}
+	return Response{Status: true}
 }
 
-func ProcessExecute(args []any, engine *Engine) Response {
-	if len(args) == 0 {
-		return Response{Status: false, Msg: "Engine: Missing execute operation", Args: []any{}}
+func ProcessCd(args []any) Response {
+	operation, err := GetFirstArg(args)
+	if err != nil {
+		return *err
 	}
 
-	operation, ok := args[0].(string)
-	if !ok {
-		return Response{Status: false, Msg: "Engine: Execute operation must be a string", Args: []any{}}
+	switch operation {
+	case "app":
+	case "action":
+	default:
+		return Response{
+			Status: false,
+			Msg:    "Invalid operation. Expected app or action",
+		}
+	}
+
+	return Response{Status: true}
+}
+
+func ProcessLs(args []any) Response {
+	operation, err := GetFirstArg(args)
+	if err != nil {
+		//here hsow h te child apps 
+	}
+
+	switch operation {
+	case "actions":
+	case "sequences":
+	default:
+		return Response{
+			Status: false,
+			Msg:    "Invalid operation. Expected app, actions, or sequences",
+		}
+	}
+
+	return Response{Status: true}
+}
+
+func ProcessExecute(args []any) Response {
+	operation, err := GetFirstArg(args)
+	if err != nil {
+		return *err
 	}
 
 	switch operation {
 	case "action":
-		if len(args) < 3 {
-			return Response{Status: false, Msg: "Engine: Missing action name or application ID", Args: []any{}}
-		}
-
-		actionName, ok := args[1].(string)
-		if !ok {
-			return Response{Status: false, Msg: "Engine: Action name must be a string", Args: []any{}}
-		}
-
-		appIDStr, ok := args[2].(string)
-		if !ok {
-			return Response{Status: false, Msg: "Engine: Application ID must be a string", Args: []any{}}
-		}
-
-		appID, err := uuid.Parse(appIDStr)
-		if err != nil {
-			return Response{Status: false, Msg: "Engine: Invalid application ID", Args: []any{}}
-		}
-
-		actionID, err := GetActionID(appID, actionName, engine)
-		if err != nil {
-			return Response{Status: false, Msg: err.Error(), Args: []any{}}
-		}
-
-		engine.Tester.SetUpTester()
-
-		if action, exists := (*engine.Http_config)[actionID]; exists {
-			actionResponse := engine.Tester.ExecuteHTTPAction(action, actionID)
-			if actionResponse == nil {
-				return Response{Status: false, Msg: "Engine: HTTP action execution failed", Args: []any{}}
-			}
-			return Response{Status: true,Msg:    "Engine: HTTP action executed successfully",Args:   []any{actionResponse},}
-		}
-
-		// if action, exists := (*engine.Ws_config)[actionID]; exists {
-		// 	engine.Tester.ExecuteWSAction(&action, actionID)
-		// 	return Response{Status: true, Msg: "Engine: WebSocket action executed successfully", Args: []any{}}
-		// }
-
-		return Response{Status: false, Msg: "Engine: Action not found in action configs", Args: []any{}}
-	
 	case "sequence":
-		if len(args) < 3 {
-			return Response{Status: false, Msg: "Engine: Missing sequence name or application ID", Args: []any{}}
-		}
-
-		sequenceName, ok := args[1].(string)
-		if !ok {
-			return Response{Status: false, Msg: "Engine: Sequence name must be a string", Args: []any{}}
-		}
-
-		appIDStr, ok := args[2].(string)
-		if !ok {
-			return Response{Status: false, Msg: "Engine: Application ID must be a string", Args: []any{}}
-		}
-
-		appID, err := uuid.Parse(appIDStr)
-		if err != nil {
-			return Response{Status: false, Msg: "Engine: Invalid application ID", Args: []any{}}
-		}
-
-		_, sequence, err := GetSequence(appID, sequenceName, engine)
-		if err != nil {
-			return Response{Status: false, Msg: err.Error(), Args: []any{}}
-		}
-
-		sequenceState := engine.Tester.ExecuteSequence(sequence, engine.Http_config, engine.Ws_config)
-
-		return Response{
-			Status: true,
-			Msg:    "Engine: Sequence executed successfully",
-			Args:   []any{sequenceState},
-		}
-
-	case "":
-		return Response{Status: false, Msg: "Engine: Execute operation is empty", Args: []any{}}
-
 	default:
-		return Response{Status: false, Msg: fmt.Sprintf("Engine: Unknown execute operation %q", operation), Args: []any{}}
+		return Response{
+			Status: false,
+			Msg:    "Invalid operation. Expected action or sequence",
+		}
 	}
+
+	return Response{Status: true}
 }
 
+func GetFirstArg(args []any) (any, *Response) {
+	if len(args) == 0 {
+		return nil, &Response{
+			Status: false,
+			Msg:    "Engine: Missing operation",
+			Args:   nil,
+		}
+	}
 
+	return args[0], nil
+}
