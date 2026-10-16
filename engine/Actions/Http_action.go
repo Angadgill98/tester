@@ -29,7 +29,7 @@ type HTTP_opts struct {
 	Method        string            `json:"method"`
 	Headers       map[string]string `json:"headers"`
 	Query         []string          `json:"query"`
-	Body          []byte            `json:"body"`
+	Body          json.RawMessage   `json:"body"`
 }
 
 func CreateHttpAction(action_name string, opts HTTP_opts) *Http_action {

@@ -1,5 +1,7 @@
 package main
 
+import "encoding/json"
+
 
 type Actions_opts struct {
 	Action_type string    `json:"action_type"`
@@ -14,7 +16,7 @@ type HTTP_opts struct {
 	Method        string            `json:"method"`
 	Headers       map[string]string `json:"headers"`
 	Query         []string          `json:"query"`
-	Body          []byte            `json:"body"`
+	Body          json.RawMessage   `json:"body"`
 }
 
 type WS_opts struct {

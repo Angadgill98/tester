@@ -562,7 +562,11 @@ func ProcessCd(args []any, engine *Engine) Response {
 			}
 
 			if err := json.Unmarshal(optsData, &action.Opts); err != nil {
-				return Response{Status: false, Msg: "Engine: Invalid HTTP action options", Args: []any{}}
+				return Response{
+					Status: false,
+					Msg:    fmt.Sprintf("Engine: Invalid HTTP action options: %v", err),
+					Args:   []any{},
+				}
 			}
 
 			(*engine.Http_config)[actionID] = action

@@ -1,4 +1,21 @@
 {
+    "602e258a-9a68-4d2e-bcb2-9a6708893164": {
+        "global_name": "signin",
+        "name": "signin",
+        "opts": {
+            "executor_type": "",
+            "url": "/api/auth/sign-in",
+            "method": "POST",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "query": null,
+            "body": {
+                "mail": "test",
+                "pass": "test"
+            }
+        }
+    },
     "e61bcf51-9681-4329-9007-0469e7d2fb8d": {
         "global_name": "act",
         "name": "act",
@@ -9,6 +26,42 @@
             "headers": null,
             "query": null,
             "body": null
+        }
+    },
+    "ea18dcb7-4c52-43f5-81b8-baa2a63bdee9": {
+        "global_name": "signup",
+        "name": "signup",
+        "opts": {
+            "executor_type": "",
+            "url": "/api/auth/sign-up",
+            "method": "POST",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "query": null,
+            "body": {
+                "mail": "test",
+                "name": "test",
+                "pass": "test"
+            }
+        }
+    },
+    "fb7fcf08-acc2-4a38-a820-7233579e9406": {
+        "global_name": "regurl",
+        "name": "regurl",
+        "opts": {
+            "executor_type": "",
+            "url": "http://localhost:8080/api/webhook/create",
+            "method": "POST",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "query": null,
+            "body": {
+                "httpMethod": "POST",
+                "receiverUrl": "https://webhook.site/ef3bb2e4-8497-472b-b2c6-29e1a23f7995",
+                "routeName": "test-webhook"
+            }
         }
     }
 }

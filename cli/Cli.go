@@ -303,6 +303,49 @@ func (cli *CLI) ProcessExecute(args []string) {
 		for _, arg := range response.Args {
 			fmt.Printf("%+v\n", arg)
 		}
+
+	case "interactive":
+		fmt.Println("CLI: Starting temporary sequence")
+
+		scanner := bufio.NewScanner(os.Stdin)
+
+		for {
+			fmt.Print("Enter action name (0 to exit): ")
+
+			if !scanner.Scan() {
+				break
+			}
+
+			input := strings.TrimSpace(scanner.Text())
+
+			if input == "0" {
+				break
+			}
+
+			args := strings.Fields(input)
+			if len(args) != 1 {
+				fmt.Println("CLI: Enter exactly one action name")
+				continue
+			}
+
+			actionName := args[0]
+			appID := global.CurrentAppID
+
+			payload := []any{"action", actionName, appID}
+			response := cli.SendPayload("execute", payload)
+
+			if !response.Status {
+				fmt.Println(response.Msg)
+				continue
+			}
+
+			fmt.Println(response.Msg)
+			for _, arg := range response.Args {
+				fmt.Printf("%+v\n", arg)
+			}
+		}
+
+		fmt.Println("CLI: Temporary sequence completed")
 	default:
 		fmt.Printf("CLI: Unknown execute operation %q\n", operation)
 	}
