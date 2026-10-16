@@ -22,3 +22,21 @@ type HTTP_opts struct {
 type WS_opts struct {
 	Executor_type string `json:"executor_type"`
 }
+
+
+type Application struct {
+	AppId       int64
+	AppName     string
+	ParentAppId int64
+	Actions     []int64
+	Sequences   []int64
+	Children    []int64
+}
+
+
+type Response struct {
+	Status bool  `json:"status"`
+	Msg    string `json:"msg"`
+	Args   []any  `json:"args"`
+}
+

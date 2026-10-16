@@ -7,566 +7,356 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 )
-
 
 type CLI struct {
 	unix_socket *net.Conn
 }
-
-func CreateCLI(socket *net.Conn ) *CLI {
+var Commands = map[string]map[string][]string{
+	"create": {
+		"app":      {"name"},
+		"http":     {"name"},
+		"ws":       {"name"},
+		"sequence": {"name"},
+	},
+	"cd": {
+		"app":    {"name"},
+		"action": {"type: http|ws", "name"},
+	},
+	"ls": {
+		"app":       {},
+		"actions":   {},
+		"sequences": {},
+	},
+	"sequence": {
+		"add":    {"sequence_name", "action_type: http|ws", "action_name", "position"},
+		"remove": {"sequence_name", "position"},
+	},
+	"execute": {
+		"action":   {"type: http|ws", "name"},
+		"sequence": {"name"},
+	},
+	"exit": {},
+	"help": {},
+}
+func CreateCLI(socket *net.Conn) *CLI {
 	return &CLI{
 		unix_socket: socket,
 	}
 }
-type Command struct {
-	Command string   `json:"command"`
-	Args    []any `json:"args"`
-}
 
-
-func (cli *CLI)StartCLILoop() {
-	fmt.Println("========== CLI START ==========")
-	fmt.Println("Available commands:")
-	fmt.Println("exit")
-	fmt.Println()
+func (cli *CLI) StartCLI() {
 	scanner := bufio.NewScanner(os.Stdin)
 
 	for {
-		fmt.Printf("%s > ", strings.Join(global.CurrentAppPath, "/"))
+		fmt.Print("> ")
 
 		if !scanner.Scan() {
-			return
+			break
 		}
 
-		command := scanner.Text()
-		payload := SplitCommand(command)
-
-		if len(payload) == 0 {
+		input := strings.Fields(scanner.Text())
+		if len(input) == 0 {
 			continue
 		}
 
-		operation := payload[0]
-		args := payload[1:]
+		command := input[0]
+		args := input[1:]
 
-		cli.HandleOperation(operation, args)
-	}
-}
-
-func SplitCommand(command string) []string {
-	return strings.Fields(command)
-}
-
-func (cli *CLI)HandleOperation(operation string, args []string) {
-	switch operation {
-	case "create":
-		cli.ProcessCreate(args)
-
-	case "sequence":
-		cli.ProcessSequence(args)
-
-	case "execute":
-		cli.ProcessExecute(args)
-
-	case "help":
-		ProcessHelp(args)
-
-	case "cd":
-		cli.ProcessCd(args)
-
-	case "ls":
-		cli.ProcessLs(args)
-
-	case "pwd":
-		fmt.Println(strings.Join(global.CurrentAppPath, "/"))
-
-	default:
-		fmt.Println("CLI: Unknown operation:", operation)
-	}
-}
-
-func (cli *CLI)ProcessCreate(args []string) {
-	if len(args) == 0 {
-		return
-	}
-
-	switch args[0] {
-		case "app":
-			if len(args) < 2 {
-				fmt.Println("CLI: Application name is missing")
-				return
-			}
-
-			appName := strings.TrimSpace(strings.ReplaceAll(strings.Join(args[1:], " "), " ", "_"))
-			currentAppID := global.CurrentAppID
-			payload := []any{"app",appName, currentAppID}
-
-			response := cli.SendPayload("create", payload)
-			if !response.Status {
-				fmt.Println(response.Msg)
-				return
-			}else{
-				fmt.Println(response.Msg)
-			}
-
-			for _, item := range response.Args {
-				fmt.Println(item)
-			}
-
-		case "action":
-			if len(args) < 2 {
-				fmt.Println("CLI: Action name is missing")
-				return
-			}
-
-			actionName := strings.TrimSpace(strings.ReplaceAll(strings.Join(args[1:], " "), " ", "_"))
-
-			var actionType string
-
-			for {
-				fmt.Print("Enter action type (http/ws, 0 to exit): ")
-
-				fmt.Scanln(&actionType)
-
-				if actionType == "0" {
-					return
-				}
-
-				actionType = strings.ToLower(strings.TrimSpace(actionType))
-
-				if actionType == "http" || actionType == "ws" {
-					break
-				}
-
-				fmt.Println("CLI: Invalid action type. Enter http, ws, or 0 to exit.")
-			}
-
-			var opts Actions_opts
-
-			switch strings.ToLower(actionType) {
-			case "http":
-				opts = Actions_opts{
-					Action_type: "http",
-					HTTP:        HTTP_opts{},
-				}
-
-			case "ws":
-				opts = Actions_opts{
-					Action_type: "ws",
-					WS:          WS_opts{},
-				}
-
-			default:
-				fmt.Println("CLI: Invalid action type. Use http or ws")
-				return
-			}
-
-			currentAppID := global.CurrentAppID
-			payload := []any{"action", actionName, currentAppID, opts}
-
-			response := cli.SendPayload("create", payload)
-			if !response.Status {
-				fmt.Println(response.Msg)
-				return
-			}
-
-			fmt.Println(response.Msg)
-
-			for _, item := range response.Args {
-				fmt.Println(item)
-			}
-		
+		switch command {
+		case "create":
+			cli.ProcessCreate(args)
+		case "cd":
+			cli.ProcessCD(args)
+		case "ls":
+			cli.ProcessLS(args)
 		case "sequence":
-			if len(args) < 2 {
-				fmt.Println("CLI: Sequence name is missing")
-				return
-			}
-
-			sequenceName := strings.TrimSpace(strings.ReplaceAll(strings.Join(args[1:], " "), " ", "_"))
-			currentAppID := global.CurrentAppID
-			payload := []any{"sequence", sequenceName, currentAppID}
-
-			response := cli.SendPayload("create", payload)
-			if !response.Status {
-				fmt.Println(response.Msg)
-				return
-			}
-
-			fmt.Println(response.Msg)
-
-			for _, item := range response.Args {
-				fmt.Println(item)
-			}
-
+			cli.ProcessSequence(args)
+		case "execute":
+			cli.ProcessExecute(args)
+		case "exit":
+			return
+		case "help":
+			cli.ProcessHelp()
 		default:
-			fmt.Println("CLI: Invalid create command. Use app, action, or sequence.")
-
+			fmt.Printf("Unknown command: %s\n", command)
+		}
 	}
 }
 
-func (cli *CLI) ProcessSequence(args []string) {
-	if len(args) < 1 {
-		fmt.Println("CLI: Missing sequence operation")
-		return
-	}
 
-	switch args[0] {
-	case "add":
-		if len(args) < 3 {
-			fmt.Println("CLI: Expected sequence name and action name")
-			return
-		}
 
-		sequenceName := args[1]
-		actionName := args[2]
-		currentAppID := global.CurrentAppID
-
-		response := cli.SendPayload("sequence", []any{"add", sequenceName, actionName, currentAppID})
-		if !response.Status {
-			fmt.Println(response.Msg)
-			return
-		}
-		fmt.Println(response.Msg)
-
-	case "remove":
-		if len(args) < 3 {
-			fmt.Println("CLI: Expected sequence name and action name")
-			return
-		}
-
-		sequenceName := args[1]
-		actionName := args[2]
-		currentAppID := global.CurrentAppID
-
-		response := cli.SendPayload("sequence", []any{"remove", sequenceName, actionName, currentAppID})
-		if !response.Status {
-			fmt.Println(response.Msg)
-			return
-		}
-		fmt.Println(response.Msg)
-
-	default:
-		fmt.Println("CLI: Invalid sequence operation. Use add or remove.")
-	}
-}
-
-func (cli *CLI) ProcessExecute(args []string) {
-	if len(args) < 2 {
-		fmt.Println("CLI: Invalid execute arguments")
+func (cli *CLI) ProcessCreate(args []string) {
+	if len(args) == 0 {
+		fmt.Println("Usage: create <type> <name>")
 		return
 	}
 
 	operation := args[0]
+	params := args[1:]
+
+	var data map[string]any
 
 	switch operation {
-	case "action":
-		if len(args) < 2 {
-			fmt.Println("CLI: Action name is missing")
+	case "app":
+		if len(params) != 1 {
+			fmt.Println("Usage: create app <name>")
 			return
 		}
 
-		actionName := strings.TrimSpace(strings.ReplaceAll(strings.Join(args[1:], " "), " ", "_"))
-		appID := global.CurrentAppID
+		data = map[string]any{"command": "create", "operation": "app", "name": params[0], "parent_app_id": global.CurrentAppID}
 
-		payload := []any{"action", actionName, appID}
-		response := cli.SendPayload("execute", payload)
-
-		if !response.Status {
-			fmt.Println(response.Msg)
+	case "http", "ws":
+		if len(params) != 1 {
+			fmt.Printf("Usage: create %s <name>\n", operation)
 			return
 		}
 
-		fmt.Println(response.Msg)
-		for _, arg := range response.Args {
-			fmt.Printf("%+v\n", arg)
-		}
+		data = map[string]any{"command": "create", "operation": "action", "type": operation, "name": params[0], "app_id": global.CurrentAppID, "opts": map[string]any{}}
 
 	case "sequence":
-		if len(args) < 2 {
-			fmt.Println("CLI: Sequence name is missing")
+		if len(params) != 1 {
+			fmt.Println("Usage: create sequence <name>")
 			return
 		}
 
-		sequenceName := strings.TrimSpace(strings.ReplaceAll(strings.Join(args[1:], " "), " ", "_"))
-		appID := global.CurrentAppID
+		data = map[string]any{"command": "create", "operation": "sequence", "name": params[0], "app_id": global.CurrentAppID}
 
-		payload := []any{"sequence", sequenceName, appID}
-		response := cli.SendPayload("execute", payload)
+	default:
+		fmt.Printf("Invalid create type: %s\n", operation)
+		fmt.Println("Valid types: app, http, ws, sequence")
+		return
+	}
+
+	response, err := SendData(*cli.unix_socket, data)
+	if err != nil {
+		fmt.Printf("Failed to create %s: %v\n", operation, err)
+		return
+	}
+
+	if !response.Status {
+		fmt.Printf("Create failed: %s\n", response.Msg)
+	}
+}
+
+func (cli *CLI) ProcessCD(args []string) {
+	if len(args) == 0 {
+		fmt.Println("Usage: cd <app|action> ...")
+		return
+	}
+
+	operation := args[0]
+	params := args[1:]
+
+	var data map[string]any
+
+	switch operation {
+	case "app":
+		if len(params) != 1 {
+			fmt.Println("Usage: cd app <name>")
+			return
+		}
+
+		data = map[string]any{"command": "cd", "operation": "app", "parent_app_id": global.CurrentAppID, "child_app_name": params[0]}
+
+	case "action":
+		if len(params) != 2 {
+			fmt.Println("Usage: cd action <http|ws> <name>")
+			return
+		}
+
+		if params[0] != "http" && params[0] != "ws" {
+			fmt.Printf("Invalid action type: %s\n", params[0])
+			fmt.Println("Valid action types: http, ws")
+			return
+		}
+
+		data = map[string]any{"command": "cd", "operation": "action", "app_id": global.CurrentAppID, "type": params[0], "action_name": params[1]}
+
+		response, err := SendData(*cli.unix_socket, data)
+		if err != nil {
+			fmt.Printf("Failed to retrieve action: %v\n", err)
+			return
+		}
 
 		if !response.Status {
 			fmt.Println(response.Msg)
 			return
 		}
 
-		fmt.Println(response.Msg)
-		for _, arg := range response.Args {
-			fmt.Printf("%+v\n", arg)
+		editedActionType, editedOpts, err := EditActionOpts(response)
+		if err != nil {
+			fmt.Println(err)
+			return
 		}
 
-	case "interactive":
-		fmt.Println("CLI: Starting temporary sequence")
+		fmt.Println("CLI: Edited options:")
+		fmt.Println(string(editedOpts))
 
-		scanner := bufio.NewScanner(os.Stdin)
-
-		for {
-			fmt.Print("Enter action name (0 to exit): ")
-
-			if !scanner.Scan() {
-				break
-			}
-
-			input := strings.TrimSpace(scanner.Text())
-
-			if input == "0" {
-				break
-			}
-
-			args := strings.Fields(input)
-			if len(args) != 1 {
-				fmt.Println("CLI: Enter exactly one action name")
-				continue
-			}
-
-			actionName := args[0]
-			appID := global.CurrentAppID
-
-			payload := []any{"action", actionName, appID}
-			response := cli.SendPayload("execute", payload)
-
-			if !response.Status {
-				fmt.Println(response.Msg)
-				continue
-			}
-
-			fmt.Println(response.Msg)
-			for _, arg := range response.Args {
-				fmt.Printf("%+v\n", arg)
-			}
+		saveData := map[string]any{
+			"command":   "cd",
+			"operation": "save",
+			"app_id":    global.CurrentAppID,
+			"type":      editedActionType,
+			"action_name": params[1],
+			"opts":      json.RawMessage(editedOpts),
 		}
 
-		fmt.Println("CLI: Temporary sequence completed")
-	default:
-		fmt.Printf("CLI: Unknown execute operation %q\n", operation)
-	}
-}
-
-type Response struct {
-	Status bool   `json:"status"`
-	Msg    string `json:"msg"`
-	Args   []any  `json:"args"`
-}
-
-
-
-
-var commandHelp = map[string]any{
-	"create": map[string]any{
-		"syntax": "create <type> <args...>",
-		"app":    "create app <name>",
-	},
-	"help": map[string]any{
-		"syntax": "help [command]",
-	},
-	"exit": map[string]any{
-		"syntax": "exit",
-	},
-}
-func ProcessHelp(args []string) {
-	if len(args) == 0 {
-		fmt.Println("Available commands:")
-
-		for command, value := range commandHelp {
-			data := value.(map[string]any)
-			fmt.Println(command, "-", data["syntax"])
+		saveResponse, err := SendData(*cli.unix_socket, saveData)
+		if err != nil {
+			fmt.Printf("Failed to save action options: %v\n", err)
+			return
 		}
 
-		return
-	}
-
-	commandData, exists := commandHelp[args[0]]
-	if !exists {
-		fmt.Println("Unknown command:", args[0])
-		return
-	}
-
-	data := commandData.(map[string]any)
-
-	if len(args) == 1 {
-		fmt.Println(data["syntax"])
-		return
-	}
-
-	subCommand, exists := data[args[1]]
-	if !exists {
-		fmt.Println("Unknown option:", args[1])
-		return
-	}
-
-	fmt.Println(subCommand)
-}
-
-
-func (cli *CLI) SendPayload(command string, payload []any) Response {
-	request := Command{
-		Command: command,
-		Args:    payload,
-	}
-
-	data, err := json.Marshal(request)
-	if err != nil {
-		return Response{Status: false, Msg: fmt.Sprintf("CLI: Failed to encode request: %v", err)}
-	}
-
-	data = append(data, '\n')
-
-	if _, err := (*cli.unix_socket).Write(data); err != nil {
-		return Response{Status: false, Msg: fmt.Sprintf("CLI: Failed to send request: %v", err)}
-	}
-
-	var response Response
-	if err := json.NewDecoder(*cli.unix_socket).Decode(&response); err != nil {
-		return Response{Status: false, Msg: fmt.Sprintf("CLI: Failed to receive response: %v", err)}
-	}
-
-	return response
-}
-
-func (cli *CLI) ProcessCd(args []string){
-	if len(args) == 0 {
-		return
-	}
-
-	switch args[0] {
-		case "app":
-			if len(args) < 2 {
-				fmt.Println("CLI: Application name is missing")
-				return
-			}
-
-			appName := strings.TrimSpace(strings.ReplaceAll(strings.Join(args[1:], " "), " ", "_"))
-			currentAppID := global.CurrentAppID
-			payload := []any{"app",appName, currentAppID}
-
-			response := cli.SendPayload("cd", payload)
-			if !response.Status {
-				fmt.Println(response.Msg)
-				return
-			}
-
-			fmt.Println(response.Msg)
-
-			if len(response.Args) < 2 {
-				fmt.Println("CLI: Invalid response arguments")
-				return
-			}
-
-			appName, ok := response.Args[0].(string)
-			if !ok {
-				fmt.Println("CLI: Invalid application name")
-				return
-			}
-
-			appID, ok := response.Args[1].(string)
-			if !ok {
-				fmt.Println("CLI: Invalid application ID")
-				return
-			}
-
-			global.CurrentAppPath = append(global.CurrentAppPath, appName)
-			global.CurrentAppID = appID
-
-		case "action":
-			if len(args) < 2 {
-				fmt.Println("CLI: Action name is missing")
-				return
-			}
-
-			actionName := strings.TrimSpace(strings.ReplaceAll(strings.Join(args[1:], " "), " ", "_"))
-			currentAppID := global.CurrentAppID
-
-			payload := []any{"action",actionName, currentAppID}
-
-			response := cli.SendPayload("cd", payload)
-			if !response.Status {
-				fmt.Println(response.Msg)
-				return
-			}
-
-			actionType, editedOpts, err := EditActionOpts(response)
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-
-			fmt.Println("CLI: Edited options:")
-			fmt.Println(string(editedOpts))
-
-			savePayload := []any{"save", actionName, currentAppID, actionType, json.RawMessage(editedOpts)}
-			saveResponse := cli.SendPayload("cd", savePayload)
-			if !saveResponse.Status {
-				fmt.Println(saveResponse.Msg)
-				return
-			}
-
+		if !saveResponse.Status {
 			fmt.Println(saveResponse.Msg)
+			return
+		}
 
-		case "..":
-			currentAppID := global.CurrentAppID
-			payload := []any{currentAppID}
+		fmt.Println(saveResponse.Msg)
 
-			response := cli.SendPayload("..", payload)
-			if !response.Status {
-				fmt.Println(response.Msg)
-				return
-			}else{
-				fmt.Println(response.Msg)
-			}
+		return
 
-			for _, item := range response.Args {
-				fmt.Println(item)
-			}
-
-		default:
-			fmt.Println("CLI: Unknown CD operation:", args[0])
+		
+	default:
+		fmt.Printf("Invalid cd type: %s\n", operation)
+		fmt.Println("Valid types: app, action")
+		return
 	}
-}
 
-
-func (cli *CLI) ProcessLs(args []string) {
-	payload := []any{global.CurrentAppID}
-	response := cli.SendPayload("ls", payload)
+	response, err := SendData(*cli.unix_socket, data)
+	if err != nil {
+		fmt.Printf("Failed to change directory: %v\n", err)
+		return
+	}
 
 	if !response.Status {
-		fmt.Println(response.Msg)
+		fmt.Printf("CD failed: %s\n", response.Msg)
+	}
+}
+
+func (cli *CLI) ProcessLS(args []string) {
+	if len(args) == 0 {
+		fmt.Println("Usage: ls <app|actions|sequences>")
 		return
-	}else{
-		fmt.Println(response.Msg)
 	}
 
-	for _, item := range response.Args {
-		fmt.Println(item)
+	operation := args[0]
+	var data map[string]any
+
+	switch operation {
+	case "app":
+		data = map[string]any{"command": "ls", "operation": "", "app_id": global.CurrentAppID}
+	case "actions", "sequences":
+		data = map[string]any{"command": "ls", "operation": operation, "app_id": global.CurrentAppID}
+	default:
+		fmt.Printf("Invalid ls type: %s\n", operation)
+		fmt.Println("Valid types: app, actions, sequences")
+		return
+	}
+
+	response, err := SendData(*cli.unix_socket, data)
+	if err != nil {
+		fmt.Printf("Failed to list %s: %v\n", operation, err)
+		return
+	}
+
+	if !response.Status {
+		fmt.Printf("Failed to list %s: %s\n", operation, response.Msg)
+	}
+}
+
+func (cli *CLI) ProcessSequence(args []string) {
+	if len(args) == 0 {
+		fmt.Println("Usage: sequence <add|remove> ...")
+		return
+	}
+
+	operation := args[0]
+	params := args[1:]
+	var data map[string]any
+
+	switch operation {
+	case "add":
+		if len(params) != 4 {
+			fmt.Println("Usage: sequence add <sequence_name> <http|ws> <action_name> <position>")
+			return
+		}
+
+		position, err := strconv.Atoi(params[3])
+		if err != nil {
+			fmt.Printf("Invalid position: %s\n", params[3])
+			return
+		}
+
+		if params[1] != "http" && params[1] != "ws" {
+			fmt.Printf("Invalid action type: %s\n", params[1])
+			fmt.Println("Valid action types: http, ws")
+			return
+		}
+
+		data = map[string]any{"command": "sequence", "operation": "add", "app_id": global.CurrentAppID, "sequence_name": params[0], "type": params[1], "action_name": params[2], "position": position}
+
+	case "remove":
+		if len(params) != 2 {
+			fmt.Println("Usage: sequence remove <sequence_name> <position>")
+			return
+		}
+
+		position, err := strconv.Atoi(params[1])
+		if err != nil {
+			fmt.Printf("Invalid position: %s\n", params[1])
+			return
+		}
+
+		data = map[string]any{"command": "sequence", "operation": "remove", "app_id": global.CurrentAppID, "sequence_name": params[0], "position": position}
+
+	default:
+		fmt.Printf("Invalid sequence operation: %s\n", operation)
+		fmt.Println("Valid operations: add, remove")
+		return
+	}
+
+	response, err := SendData(*cli.unix_socket, data)
+	if err != nil {
+		fmt.Printf("Failed to process sequence: %v\n", err)
+		return
+	}
+
+	if !response.Status {
+		fmt.Printf("Sequence operation failed: %s\n", response.Msg)
 	}
 }
 
 
 
-func (cli *CLI) SendCommand(command []byte) ([]byte, error) {
-	_, err := (*cli.unix_socket).Write(command)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send command: %w", err)
-	}
-
-	buffer := make([]byte, 4096)
-	n, err := (*cli.unix_socket).Read(buffer)
-	if err != nil {
-		return nil, fmt.Errorf("failed to receive response: %w", err)
-	}
-
-	return buffer[:n], nil
+func (cli *CLI) ProcessExecute(args []string) {
 }
 
 
+
+func (cli *CLI) ProcessHelp() {
+	fmt.Println("Available commands:")
+
+	for command, types := range Commands {
+		if len(types) == 0 {
+			fmt.Printf("  %s\n", command)
+			continue
+		}
+
+		for typ, args := range types {
+			fmt.Printf("  %s %s", command, typ)
+
+			for _, arg := range args {
+				fmt.Printf(" <%s>", arg)
+			}
+
+			fmt.Println()
+		}
+	}
+}
 
 
 

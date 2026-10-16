@@ -1,20 +1,26 @@
 package main
 
+import (
+	"encoding/json"
+	"fmt"
+)
 
 
-var validators= map[string]func([]any) Response{
-
-}
 
 
-func Validate(name string, args []any) Response {
-	fn, exists := validators[name]
-	if !exists {
-		return Response{
-			Status: false,
-			Msg:    "Unknown Validator op: " + name,
-		}
+
+func GetJSONField(data []byte, field string) (any, error) {
+	var obj map[string]any
+
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return nil, fmt.Errorf("Engine: invalid JSON: %w", err)
 	}
 
-	return fn(args)
+	value, exists := obj[field]
+	if !exists {
+		return nil, fmt.Errorf("Engine: field %q not found in object: %v", field, obj)
+	}
+
+	return value, nil
 }
+

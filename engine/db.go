@@ -50,9 +50,12 @@ func SetupAppsTable(db *sql.DB) error {
 	_, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS apps (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL UNIQUE,
+			name TEXT NOT NULL,
+			parent_app_id INTEGER,
 			action_ids TEXT NOT NULL DEFAULT '[]',
-			sequence_ids TEXT NOT NULL DEFAULT '[]'
+			sequence_ids TEXT NOT NULL DEFAULT '[]',
+			children TEXT NOT NULL DEFAULT '[]',
+			FOREIGN KEY (parent_app_id) REFERENCES apps(id) ON DELETE CASCADE
 		)
 	`)
 	if err != nil {
@@ -116,3 +119,5 @@ func SetupSequencesTable(db *sql.DB) error {
 
 	return nil
 }
+
+

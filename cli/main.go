@@ -1,11 +1,10 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"net"
 	"os"
 	"os/exec"
+
 )
 
 
@@ -23,16 +22,15 @@ func main(){
 		return
 	}
 
-	if err := ReceiveGlobalAppID(socket); err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	cli:=CreateCLI(&socket)
-
-	cli.StartCLILoop()
+	
 
 	defer socket.Close()
+
+	cli := CLI{
+		unix_socket: &socket,
+	}
+
+	cli.StartCLI()
 }
 
 
@@ -50,35 +48,3 @@ func Init() error {
 }
 
 
-
-
-func ReceiveGlobalAppID(conn net.Conn) error {
-    var response Response
-
-    if err := json.NewDecoder(conn).Decode(&response); err != nil {
-        return fmt.Errorf("CLI: Failed to receive GLOBAL application: %w", err)
-    }
-
-    if !response.Status {
-        return fmt.Errorf("CLI: Failed to initialize GLOBAL application: %s", response.Msg)
-    }
-
-    if len(response.Args) < 2 {
-        return fmt.Errorf("CLI: GLOBAL application name or ID missing from response")
-    }
-
-    appName, ok := response.Args[0].(string)
-    if !ok || appName == "" {
-        return fmt.Errorf("CLI: Invalid GLOBAL application name")
-    }
-
-    appID, ok := response.Args[1].(string)
-    if !ok || appID == "" {
-        return fmt.Errorf("CLI: Invalid GLOBAL application ID")
-    }
-
-    global.CurrentAppPath = []string{appName}
-    global.CurrentAppID = appID
-
-    return nil
-}

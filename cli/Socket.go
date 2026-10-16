@@ -26,19 +26,29 @@ func ConnectUnixSocketWithRetries() net.Conn {
 
 
 
-func SendData(conn net.Conn, data any) error {
+func SendData(conn net.Conn, data any) (Response, error) {
+	var response Response
+
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		fmt.Println("Failed to serialize JSON:", err)
-		return err
+		return response, fmt.Errorf("failed to serialize JSON: %w", err)
 	}
 
-	_, err = conn.Write(jsonData)
-	if err != nil {
-		fmt.Println("Failed to send JSON:", err)
-		return err
+	if _, err := conn.Write(jsonData); err != nil {
+		return response, fmt.Errorf("failed to send JSON: %w", err)
 	}
 
-	return nil
+	if err := json.NewDecoder(conn).Decode(&response); err != nil {
+		return response, fmt.Errorf("failed to read response: %w", err)
+	}
+
+
+	if len(response.Args) > 0 {
+		fmt.Println("Args:")
+		for _, arg := range response.Args {
+			fmt.Printf("  %+v\n", arg)
+		}
+	}
+
+	return response, nil
 }
-
