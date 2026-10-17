@@ -71,7 +71,6 @@ func SaveApplication(db *sql.DB, app Application) error {
 }
 
 func InsertApplication(db *sql.DB, appName string, parentAppID int64) (int64, error) {
-	var parentID any
 	if parentAppID != 0 {
 		var exists bool
 		err := db.QueryRow(`SELECT EXISTS (SELECT 1 FROM apps WHERE id = ?)`, parentAppID).Scan(&exists)
@@ -81,14 +80,9 @@ func InsertApplication(db *sql.DB, appName string, parentAppID int64) (int64, er
 		if !exists {
 			return 0, fmt.Errorf("parent application %d not found", parentAppID)
 		}
-
-		parentID = parentAppID
 	}
 
-	result, err := db.Exec(
-		`INSERT INTO apps (name, parent_app_id) VALUES (?, ?)`,
-		appName, parentID,
-	)
+	result, err := db.Exec(`INSERT INTO apps (name, parent_app_id) VALUES (?, ?)`, appName, parentAppID)
 	if err != nil {
 		return 0, fmt.Errorf("insert application: %w", err)
 	}

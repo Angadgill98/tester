@@ -1,7 +1,6 @@
 package main
 
 import (
-	application "engine/Application"
 	"log"
 )
 
@@ -12,18 +11,15 @@ func main() {
 	}
 	defer db.Close()
 
-	exists, err := application.IsChildApplication(db,0, "GLOBAL")
+	// _, err = db.Exec(`DELETE FROM apps`)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	_, err = db.Exec(`INSERT OR IGNORE INTO apps (id, name, parent_app_id, action_ids, sequence_ids, children) VALUES (0, 'GLOBAL', NULL, '[]', '[]', '[]')`)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if !exists {
-		_, err := application.InsertApplication(db, "GLOBAL", 0)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-
 	CreateSocket(db).StartSocket()
-	
 }

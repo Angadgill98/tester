@@ -11,7 +11,6 @@ type Actions_opts struct {
 
 
 type HTTP_opts struct {
-	Executor_type string            `json:"executor_type"`
 	Url           string            `json:"url"`
 	Method        string            `json:"method"`
 	Headers       map[string]string `json:"headers"`

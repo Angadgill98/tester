@@ -139,6 +139,7 @@ func (cli *CLI) ProcessCreate(args []string) {
 	if !response.Status {
 		fmt.Printf("Create failed: %s\n", response.Msg)
 	}
+	fmt.Printf("Engine response: %+v\n", response)
 }
 
 func (cli *CLI) ProcessCD(args []string) {
@@ -266,6 +267,7 @@ func (cli *CLI) ProcessLS(args []string) {
 	if !response.Status {
 		fmt.Printf("Failed to list %s: %s\n", operation, response.Msg)
 	}
+	fmt.Printf("Engine response: %+v\n", response)
 }
 
 func (cli *CLI) ProcessSequence(args []string) {

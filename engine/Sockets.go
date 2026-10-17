@@ -208,6 +208,17 @@ func (socket *Socket) ProcessCreate(data []byte) Response {
 				return Response{Status: false, Msg: err.Error()}
 			}
 
+			app, err := application.GetApplication(socket.DB, params.AppID)
+			if err != nil {
+				return Response{Status: false, Msg: fmt.Sprintf("Engine: failed to get application: %v", err)}
+			}
+
+			app.Actions = append(app.Actions, actionID)
+
+			if err := application.SaveApplication(socket.DB, app); err != nil {
+				return Response{Status: false, Msg: fmt.Sprintf("Engine: failed to save application: %v", err)}
+			}
+
 			return Response{Status: true, Msg: "HTTP action created successfully", Args: []any{actionID}}
 
 		case "ws":
@@ -228,6 +239,18 @@ func (socket *Socket) ProcessCreate(data []byte) Response {
 			if err != nil {
 				return Response{Status: false, Msg: err.Error()}
 			}
+
+			app, err := application.GetApplication(socket.DB, params.AppID)
+			if err != nil {
+				return Response{Status: false, Msg: fmt.Sprintf("Engine: failed to get application: %v", err)}
+			}
+
+			app.Actions = append(app.Actions, actionID)
+
+			if err := application.SaveApplication(socket.DB, app); err != nil {
+				return Response{Status: false, Msg: fmt.Sprintf("Engine: failed to save application: %v", err)}
+			}
+
 
 			return Response{Status: true, Msg: "WebSocket action created successfully", Args: []any{actionID}}
 
@@ -262,6 +285,17 @@ func (socket *Socket) ProcessCreate(data []byte) Response {
 		sequenceID, err := sequences.InsertSequence(socket.DB, params.AppID, params.Name)
 		if err != nil {
 			return Response{Status: false, Msg: err.Error()}
+		}
+
+		app, err := application.GetApplication(socket.DB, params.AppID)
+		if err != nil {
+			return Response{Status: false, Msg: fmt.Sprintf("Engine: failed to get application: %v", err)}
+		}
+
+		app.Sequences = append(app.Sequences, sequenceID)
+
+		if err := application.SaveApplication(socket.DB, app); err != nil {
+			return Response{Status: false, Msg: fmt.Sprintf("Engine: failed to save application: %v", err)}
 		}
 
 		return Response{
@@ -423,7 +457,11 @@ func (socket *Socket) ProcessCd(data []byte) Response {
 				return Response{Status: false, Msg: fmt.Sprintf("Engine: failed to get HTTP action: %v", err)}
 			}
 
-			return Response{Status: true, Msg: "Engine: HTTP action retrieved successfully", Args: []any{action}}
+			return Response{
+				Status: true,
+				Msg:    "Engine: HTTP action retrieved successfully",
+				Args:   []any{"http", action.Opts},
+			}
 
 		case "ws":
 			actionID, err := Actions.GetWSActionIDByName(socket.DB, params.AppID, params.Action_name)
@@ -436,7 +474,11 @@ func (socket *Socket) ProcessCd(data []byte) Response {
 				return Response{Status: false, Msg: fmt.Sprintf("Engine: failed to get WebSocket action: %v", err)}
 			}
 
-			return Response{Status: true, Msg: "Engine: WebSocket action retrieved successfully", Args: []any{action}}
+			return Response{
+				Status: true,
+				Msg:    "Engine: WebSocket action retrieved successfully",
+				Args:   []any{"ws", action.Opts},
+			}
 
 		default:
 			return Response{Status: false, Msg: fmt.Sprintf("Engine: invalid action type %q; expected http or ws", params.Type)}
