@@ -335,8 +335,83 @@ func (cli *CLI) ProcessSequence(args []string) {
 
 
 func (cli *CLI) ProcessExecute(args []string) {
-}
+	if len(args) == 0 {
+		fmt.Println("Usage: execute <action|sequence|reset> ...")
+		return
+	}
 
+	operation := args[0]
+	params := args[1:]
+
+	var data map[string]any
+
+	switch operation {
+	case "action":
+		if len(params) != 2 {
+			fmt.Println("Usage: execute action <http|ws> <action_name>")
+			return
+		}
+
+		if params[0] != "http" && params[0] != "ws" {
+			fmt.Println("CLI: Action type must be 'http' or 'ws'")
+			return
+		}
+
+		data = map[string]any{
+			"command":     "execute",
+			"operation":   "action",
+			"app_id":      global.CurrentAppID,
+			"type":        params[0],
+			"action_name": params[1],
+		}
+
+	case "sequence":
+		if len(params) != 1 {
+			fmt.Println("Usage: execute sequence <sequence_name>")
+			return
+		}
+
+		data = map[string]any{
+			"command":       "execute",
+			"operation":     "sequence",
+			"app_id":        global.CurrentAppID,
+			"sequence_name": params[0],
+		}
+
+	case "reset":
+		if len(params) != 0 {
+			fmt.Println("Usage: execute reset")
+			return
+		}
+
+		data = map[string]any{
+			"command":   "execute",
+			"operation": "reset",
+			"app_id":    global.CurrentAppID,
+		}
+
+	default:
+		fmt.Println("Usage: execute <action|sequence|reset> ...")
+		return
+	}
+
+	response, err := SendData(*cli.unix_socket, data)
+	if err != nil {
+		fmt.Printf("CLI: Failed to execute command: %v\n", err)
+		return
+	}
+
+	if !response.Status {
+		fmt.Println(response.Msg)
+		return
+	}
+
+	fmt.Println(response.Msg)
+
+	for _, arg := range response.Args {
+		fmt.Println(arg)
+	}
+}
 
 
 func (cli *CLI) ProcessHelp() {

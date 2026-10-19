@@ -130,16 +130,24 @@ type ExecuteActionParams struct {
 	Command    string `json:"command"`
 	Operation  string `json:"operation"`
 	AppID      int64  `json:"app_id"`
-	ActionID   int64  `json:"action_id"`
+	Type       string `json:"type"`
 	ActionName string `json:"action_name"`
 }
 
 type ExecuteSequenceParams struct {
-	Command    string `json:"command"`
-	Operation  string `json:"operation"`
-	AppID      int64  `json:"app_id"`
-	SequenceID int64  `json:"sequence_id"`
+	Command      string `json:"command"`
+	Operation    string `json:"operation"`
+	AppID        int64  `json:"app_id"`
+	SequenceName string `json:"sequence_name"`
 }
+
+type ExecuteResetParams struct {
+	Command   string `json:"command"`
+	Operation string `json:"operation"`
+	AppID     int64  `json:"app_id"`
+}
+
+
 
 
 
@@ -151,3 +159,25 @@ type SaveActionParams struct {
 	Type       string          `json:"type"` // "http" or "ws"
 	Opts       json.RawMessage `json:"opts"`
 }
+
+
+
+
+
+
+
+
+// type ExecuteActionParams struct {
+// 	AppID      int64  `json:"app_id"`
+// 	Type       string `json:"type"`
+// 	ActionName string `json:"action_name"`
+// }
+
+// type ExecuteSequenceParams struct {
+// 	AppID        int64  `json:"app_id"`
+// 	SequenceName string `json:"sequence_name"`
+// }
+
+// type ExecuteResetParams struct {
+// 	AppID int64 `json:"app_id"`
+// }

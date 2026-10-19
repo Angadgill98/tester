@@ -617,10 +617,89 @@ func (socket *Socket) ProcessExecute(data []byte) Response {
 
 	switch op {
 	case "action":
+		appIDField, err := GetJSONField(data, "app_id")
+		if err != nil {
+			return Response{Status: false, Msg: err.Error()}
+		}
+
+		appID, ok := appIDField.(float64)
+		if !ok {
+			return Response{Status: false, Msg: "Engine: app_id must be a number"}
+		}
+
+		actionTypeField, err := GetJSONField(data, "type")
+		if err != nil {
+			return Response{Status: false, Msg: err.Error()}
+		}
+
+		actionType, ok := actionTypeField.(string)
+		if !ok {
+			return Response{Status: false, Msg: "Engine: type must be a string"}
+		}
+
+		if actionType != "http" && actionType != "ws" {
+			return Response{Status: false, Msg: "Engine: type must be 'http' or 'ws'"}
+		}
+
+		actionNameField, err := GetJSONField(data, "action_name")
+		if err != nil {
+			return Response{Status: false, Msg: err.Error()}
+		}
+
+		actionName, ok := actionNameField.(string)
+		if !ok {
+			return Response{Status: false, Msg: "Engine: action_name must be a string"}
+		}
+
+		// Execute the specified HTTP or WebSocket action here.
+
+		_ = appID
+		_ = actionName
+
 	case "sequence":
+		appIDField, err := GetJSONField(data, "app_id")
+		if err != nil {
+			return Response{Status: false, Msg: err.Error()}
+		}
+
+		appID, ok := appIDField.(float64)
+		if !ok {
+			return Response{Status: false, Msg: "Engine: app_id must be a number"}
+		}
+
+		sequenceNameField, err := GetJSONField(data, "sequence_name")
+		if err != nil {
+			return Response{Status: false, Msg: err.Error()}
+		}
+
+		sequenceName, ok := sequenceNameField.(string)
+		if !ok {
+			return Response{Status: false, Msg: "Engine: sequence_name must be a string"}
+		}
+
+		// Execute the specified sequence here.
+
+		_ = appID
+		_ = sequenceName
+
+	case "reset":
+		appIDField, err := GetJSONField(data, "app_id")
+		if err != nil {
+			return Response{Status: false, Msg: err.Error()}
+		}
+
+		appID, ok := appIDField.(float64)
+		if !ok {
+			return Response{Status: false, Msg: "Engine: app_id must be a number"}
+		}
+
+		// Reset execution state for the specified application here.
+
+		_ = appID
+
 	default:
-		return Response{Status: false, Msg: "Engine: Invalid execute operation. Expected action or sequence"}
+		return Response{Status: false, Msg: "Engine: Invalid execute operation. Expected action, sequence, or reset"}
 	}
 
-	return Response{Status: true}
+	return Response{Status: true, Msg: "Engine: Execute command processed successfully"}
 }
