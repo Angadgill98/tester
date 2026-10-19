@@ -14,6 +14,7 @@ import (
 type CLI struct {
 	unix_socket *net.Conn
 }
+
 var Commands = map[string]map[string][]string{
 	"create": {
 		"app":      {"name"},
@@ -35,12 +36,15 @@ var Commands = map[string]map[string][]string{
 		"remove": {"sequence_name", "position"},
 	},
 	"execute": {
-		"action":   {"type: http|ws", "name"},
-		"sequence": {"name"},
+		"action":   {"type: http|ws", "action_name"},
+		"sequence": {"sequence_name"},
+		"reset":    {},
+		"show":     {},
 	},
 	"exit": {},
 	"help": {},
 }
+
 func CreateCLI(socket *net.Conn) *CLI {
 	return &CLI{
 		unix_socket: socket,
@@ -282,25 +286,36 @@ func (cli *CLI) ProcessSequence(args []string) {
 
 	switch operation {
 	case "add":
-		if len(params) != 4 {
-			fmt.Println("Usage: sequence add <sequence_name> <http|ws> <action_name> <position>")
-			return
-		}
+	if len(params) != 3 && len(params) != 4 {
+		fmt.Println("Usage: sequence add <sequence_name> <http|ws> <action_name> [position]")
+		return
+	}
 
-		position, err := strconv.Atoi(params[3])
+	position := -1
+	if len(params) == 4 {
+		var err error
+		position, err = strconv.Atoi(params[3])
 		if err != nil {
 			fmt.Printf("Invalid position: %s\n", params[3])
 			return
 		}
+	}
 
-		if params[1] != "http" && params[1] != "ws" {
-			fmt.Printf("Invalid action type: %s\n", params[1])
-			fmt.Println("Valid action types: http, ws")
-			return
-		}
+	if params[1] != "http" && params[1] != "ws" {
+		fmt.Printf("Invalid action type: %s\n", params[1])
+		fmt.Println("Valid action types: http, ws")
+		return
+	}
 
-		data = map[string]any{"command": "sequence", "operation": "add", "app_id": global.CurrentAppID, "sequence_name": params[0], "type": params[1], "action_name": params[2], "position": position}
-
+	data = map[string]any{
+		"command":       "sequence",
+		"operation":     "add",
+		"app_id":        global.CurrentAppID,
+		"sequence_name": params[0],
+		"type":          params[1],
+		"action_name":   params[2],
+		"position":      position,
+	}
 	case "remove":
 		if len(params) != 2 {
 			fmt.Println("Usage: sequence remove <sequence_name> <position>")
@@ -336,7 +351,7 @@ func (cli *CLI) ProcessSequence(args []string) {
 
 func (cli *CLI) ProcessExecute(args []string) {
 	if len(args) == 0 {
-		fmt.Println("Usage: execute <action|sequence|reset> ...")
+		fmt.Println("Usage: execute <action|sequence|reset|show> ...")
 		return
 	}
 
@@ -390,8 +405,20 @@ func (cli *CLI) ProcessExecute(args []string) {
 			"app_id":    global.CurrentAppID,
 		}
 
+	case "show":
+		if len(params) != 0 {
+			fmt.Println("Usage: execute show")
+			return
+		}
+
+		data = map[string]any{
+			"command":   "execute",
+			"operation": "show",
+			"app_id":    global.CurrentAppID,
+		}
+
 	default:
-		fmt.Println("Usage: execute <action|sequence|reset> ...")
+		fmt.Println("Usage: execute <action|sequence|reset|show> ...")
 		return
 	}
 

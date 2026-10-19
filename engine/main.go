@@ -1,6 +1,7 @@
 package main
 
 import (
+	tester "engine/Tester"
 	"log"
 )
 
@@ -20,6 +21,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	CreateSocket(db).StartSocket()
+	tester:=tester.CreateTesterObj()
+	CreateSocket(db,&tester).StartSocket()
 }

@@ -6,6 +6,7 @@ import (
 	"engine/Actions"
 	application "engine/Application"
 	sequences "engine/Sequences"
+	tester "engine/Tester"
 	Global "engine/global"
 	"fmt"
 	"io"
@@ -16,12 +17,14 @@ import (
 
 type Socket struct {
 	DB        *sql.DB
+	Tester		*tester.Tester
 
 }
 
-func  CreateSocket(db *sql.DB) *Socket {
+func  CreateSocket(db *sql.DB,tester *tester.Tester) *Socket {
 	return &Socket{
 		DB:          db,
+		Tester: 	tester,
 	}
 }
 
@@ -350,6 +353,10 @@ func (socket *Socket) ProcessSequence(data []byte) Response {
 			return Response{Status: false, Msg: fmt.Sprintf("Engine: failed to get action: %v", err)}
 		}
 
+		if params.Position == -1 {
+			params.Position = len(sequence.ActionIDs)
+		}
+
 		if params.Position < 0 || params.Position > len(sequence.ActionIDs) {
 			return Response{Status: false, Msg: fmt.Sprintf("Engine: invalid insertion position %d", params.Position)}
 		}
@@ -628,7 +635,54 @@ func (socket *Socket) ProcessExecute(data []byte) Response {
 			return Response{Status: false, Msg: "Engine: Action name is required"}
 		}
 
-		// Execute the action using params.AppID, params.Type, and params.ActionName.
+		if params.Type == "http" {
+	actionID, err := Actions.GetHTTPActionIDByName(socket.DB, params.AppID, params.ActionName)
+	if err != nil {
+		return Response{Status: false, Msg: fmt.Sprintf("Engine: Failed to find HTTP action: %v", err)}
+	}
+
+	action, err := Actions.GetHTTPAction(socket.DB, actionID, params.AppID)
+	if err != nil {
+		return Response{Status: false, Msg: fmt.Sprintf("Engine: Failed to retrieve HTTP action: %v", err)}
+	}
+
+	result := socket.Tester.ExecuteHTTPAction(&action)
+	if result == nil {
+		return Response{Status: false, Msg: "Engine: HTTP action execution failed"}
+	}
+
+	// Save the response in the tester's sequence state.
+	if socket.Tester.Sequence_state.State == nil {
+		socket.Tester.Sequence_state.State = make(map[string][]tester.ActionResponse)
+	}
+	socket.Tester.Sequence_state.State[action.ActionName] = append(
+		socket.Tester.Sequence_state.State[action.ActionName],
+		*result,
+	)
+	socket.Tester.Sequence_state.Order = append(
+		socket.Tester.Sequence_state.Order,
+		action.ActionName,
+	)
+
+	return Response{
+		Status: true,
+		Msg:    "Engine: HTTP action executed successfully",
+		Args:   []any{result},
+	}
+}
+		actionID, err := Actions.GetWSActionIDByName(socket.DB, params.AppID, params.ActionName)
+		if err != nil {
+			return Response{Status: false, Msg: fmt.Sprintf("Engine: Failed to find WebSocket action: %v", err)}
+		}
+
+		wsAction, err := Actions.GetWSAction(socket.DB, actionID, params.AppID)
+		if err != nil {
+			return Response{Status: false, Msg: fmt.Sprintf("Engine: Failed to retrieve WebSocket action: %v", err)}
+		}
+
+		// TODO: Execute the WebSocket action using wsAction.
+		_ = wsAction
+		return Response{Status: false, Msg: "Engine: WebSocket action execution is not implemented yet"}
 
 	case "sequence":
 		var params ExecuteSequenceParams
@@ -640,7 +694,13 @@ func (socket *Socket) ProcessExecute(data []byte) Response {
 			return Response{Status: false, Msg: "Engine: Sequence name is required"}
 		}
 
-		// Execute the sequence using params.AppID and params.SequenceName.
+		sequence, err := sequences.GetSequenceByName(socket.DB, params.AppID, params.SequenceName)
+		if err != nil {
+			return Response{Status: false, Msg: fmt.Sprintf("Engine: Failed to retrieve sequence: %v", err)}
+		}
+
+		result := socket.Tester.ExecuteSequence(socket.DB, sequence)
+		return Response{Status: true, Msg: "Engine: Sequence executed successfully", Args: []any{result}}
 
 	case "reset":
 		var params ExecuteResetParams
@@ -648,11 +708,15 @@ func (socket *Socket) ProcessExecute(data []byte) Response {
 			return Response{Status: false, Msg: fmt.Sprintf("Engine: Failed to parse reset parameters: %v", err)}
 		}
 
-		// Reset execution state for params.AppID.
+		newTester := tester.CreateTesterObj()
+		socket.Tester = &newTester
+		return Response{Status: true, Msg: "Engine: Tester state reset successfully"}
+
+	case "show":
+		state := socket.Tester.ShowState()
+		return Response{Status: true, Msg: "Engine: Tester state retrieved successfully", Args: []any{state}}
 
 	default:
-		return Response{Status: false, Msg: "Engine: Invalid execute operation. Expected action, sequence, or reset"}
+		return Response{Status: false, Msg: "Engine: Invalid execute operation. Expected action, sequence, reset, or show"}
 	}
-
-	return Response{Status: true, Msg: "Engine: Execute command processed successfully"}
 }

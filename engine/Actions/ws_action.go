@@ -71,6 +71,23 @@ func WSActionExists(db *sql.DB, appID int64, actionName string) (bool, error) {
 	return exists, nil
 }
 
+func WSActionExistsByID(db *sql.DB, appID int64, actionID int64) (bool, error) {
+	var exists bool
+
+	err := db.QueryRow(
+		`SELECT EXISTS (
+			SELECT 1 FROM ws_actions
+			WHERE app_id = ? AND id = ?
+		)`,
+		appID, actionID,
+	).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("check WebSocket action existence: %w", err)
+	}
+
+	return exists, nil
+}
+
 
 func GetWSAction(db *sql.DB, actionID int64, appID int64) (WSAction, error) {
 	var action WSAction
