@@ -605,97 +605,50 @@ func (socket *Socket) ProcessLs(data []byte) Response {
 }
 
 func (socket *Socket) ProcessExecute(data []byte) Response {
-	operation, err := GetJSONField(data, "operation")
-	if err != nil {
-		return Response{Status: false, Msg: err.Error()}
+	var operation struct {
+		Operation string `json:"operation"`
 	}
 
-	op, ok := operation.(string)
-	if !ok {
-		return Response{Status: false, Msg: "Engine: operation must be a string"}
+	if err := json.Unmarshal(data, &operation); err != nil {
+		return Response{Status: false, Msg: fmt.Sprintf("Engine: Failed to parse execute operation: %v", err)}
 	}
 
-	switch op {
+	switch operation.Operation {
 	case "action":
-		appIDField, err := GetJSONField(data, "app_id")
-		if err != nil {
-			return Response{Status: false, Msg: err.Error()}
+		var params ExecuteActionParams
+		if err := json.Unmarshal(data, &params); err != nil {
+			return Response{Status: false, Msg: fmt.Sprintf("Engine: Failed to parse action parameters: %v", err)}
 		}
 
-		appID, ok := appIDField.(float64)
-		if !ok {
-			return Response{Status: false, Msg: "Engine: app_id must be a number"}
+		if params.Type != "http" && params.Type != "ws" {
+			return Response{Status: false, Msg: "Engine: Action type must be 'http' or 'ws'"}
 		}
 
-		actionTypeField, err := GetJSONField(data, "type")
-		if err != nil {
-			return Response{Status: false, Msg: err.Error()}
+		if params.ActionName == "" {
+			return Response{Status: false, Msg: "Engine: Action name is required"}
 		}
 
-		actionType, ok := actionTypeField.(string)
-		if !ok {
-			return Response{Status: false, Msg: "Engine: type must be a string"}
-		}
-
-		if actionType != "http" && actionType != "ws" {
-			return Response{Status: false, Msg: "Engine: type must be 'http' or 'ws'"}
-		}
-
-		actionNameField, err := GetJSONField(data, "action_name")
-		if err != nil {
-			return Response{Status: false, Msg: err.Error()}
-		}
-
-		actionName, ok := actionNameField.(string)
-		if !ok {
-			return Response{Status: false, Msg: "Engine: action_name must be a string"}
-		}
-
-		// Execute the specified HTTP or WebSocket action here.
-
-		_ = appID
-		_ = actionName
+		// Execute the action using params.AppID, params.Type, and params.ActionName.
 
 	case "sequence":
-		appIDField, err := GetJSONField(data, "app_id")
-		if err != nil {
-			return Response{Status: false, Msg: err.Error()}
+		var params ExecuteSequenceParams
+		if err := json.Unmarshal(data, &params); err != nil {
+			return Response{Status: false, Msg: fmt.Sprintf("Engine: Failed to parse sequence parameters: %v", err)}
 		}
 
-		appID, ok := appIDField.(float64)
-		if !ok {
-			return Response{Status: false, Msg: "Engine: app_id must be a number"}
+		if params.SequenceName == "" {
+			return Response{Status: false, Msg: "Engine: Sequence name is required"}
 		}
 
-		sequenceNameField, err := GetJSONField(data, "sequence_name")
-		if err != nil {
-			return Response{Status: false, Msg: err.Error()}
-		}
-
-		sequenceName, ok := sequenceNameField.(string)
-		if !ok {
-			return Response{Status: false, Msg: "Engine: sequence_name must be a string"}
-		}
-
-		// Execute the specified sequence here.
-
-		_ = appID
-		_ = sequenceName
+		// Execute the sequence using params.AppID and params.SequenceName.
 
 	case "reset":
-		appIDField, err := GetJSONField(data, "app_id")
-		if err != nil {
-			return Response{Status: false, Msg: err.Error()}
+		var params ExecuteResetParams
+		if err := json.Unmarshal(data, &params); err != nil {
+			return Response{Status: false, Msg: fmt.Sprintf("Engine: Failed to parse reset parameters: %v", err)}
 		}
 
-		appID, ok := appIDField.(float64)
-		if !ok {
-			return Response{Status: false, Msg: "Engine: app_id must be a number"}
-		}
-
-		// Reset execution state for the specified application here.
-
-		_ = appID
+		// Reset execution state for params.AppID.
 
 	default:
 		return Response{Status: false, Msg: "Engine: Invalid execute operation. Expected action, sequence, or reset"}
