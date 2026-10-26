@@ -11,7 +11,7 @@ type HTTPOpts struct {
 	URL     string            `json:"url"`
 	Headers map[string]string `json:"headers"`
 	Query   map[string]string `json:"query"`
-	Body    []byte            `json:"body"`
+	Body    json.RawMessage            `json:"body"`
 }
 
 type HTTPAction struct {

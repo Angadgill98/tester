@@ -45,7 +45,7 @@ func SaveApplication(db *sql.DB, app Application) error {
 	}
 
 	var parentAppID any
-	if app.ParentAppId != 0 {
+	if app.AppId != 0 {
 		parentAppID = app.ParentAppId
 	}
 

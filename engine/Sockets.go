@@ -215,7 +215,6 @@ func (socket *Socket) ProcessCreate(data []byte) Response {
 			if err != nil {
 				return Response{Status: false, Msg: fmt.Sprintf("Engine: failed to get application: %v", err)}
 			}
-
 			app.Actions = append(app.Actions, actionID)
 
 			if err := application.SaveApplication(socket.DB, app); err != nil {

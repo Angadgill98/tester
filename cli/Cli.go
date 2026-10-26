@@ -166,6 +166,36 @@ func (cli *CLI) ProcessCD(args []string) {
 
 		data = map[string]any{"command": "cd", "operation": "app", "parent_app_id": global.CurrentAppID, "child_app_name": params[0]}
 
+		response, err := SendData(*cli.unix_socket, data)
+		if err != nil {
+			fmt.Printf("Failed to change directory: %v\n", err)
+			return
+		}
+
+		if !response.Status {
+			fmt.Printf("CD failed: %s\n", response.Msg)
+			return
+		}
+
+		 if len(response.Args) == 0 {
+			fmt.Println("CD failed: missing application data")
+			return
+		}
+
+		app, ok := response.Args[0].(map[string]any)
+		if !ok {
+			fmt.Println("CD failed: invalid application data")
+			return
+		}
+
+		appID, ok := app["AppId"].(float64)
+		if !ok {
+			fmt.Println("CD failed: invalid application ID")
+			return
+		}
+
+		global.CurrentAppID = int64(appID)
+
 	case "action":
 		if len(params) != 2 {
 			fmt.Println("Usage: cd action <http|ws> <name>")
@@ -231,15 +261,7 @@ func (cli *CLI) ProcessCD(args []string) {
 		return
 	}
 
-	response, err := SendData(*cli.unix_socket, data)
-	if err != nil {
-		fmt.Printf("Failed to change directory: %v\n", err)
-		return
-	}
-
-	if !response.Status {
-		fmt.Printf("CD failed: %s\n", response.Msg)
-	}
+	
 }
 
 func (cli *CLI) ProcessLS(args []string) {
