@@ -39,21 +39,27 @@ func CreateAssertion(db *sql.DB, actionId int64, statusCode int64, assertions []
 	return assertionID, nil
 }
 
+func UpdateActionAssertion(db *sql.DB, assertionId int64, actionId int64, statusCode int, assertions []json.RawMessage) error {
+	assertionJSON, err := json.Marshal(assertions)
+	if err != nil {
+		return err
+	}
 
-func InsertActionAssertion(db *sql.DB, assertionId int64, assertion json.RawMessage) error {
-	query := `
-		UPDATE assertions
-		SET assertion = json_insert(assertion, '$[#]', json(?))
-		WHERE assertion_id = ?
-	`
+	query, values := BuildUpdateQuery("assertions", map[string]any{
+		"action_id":   actionId,
+		"status_code": statusCode,
+		"assertion":   string(assertionJSON),
+	}, map[string][]any{
+		"assertion_id": {"=", assertionId},
+	})
 
-	_, err := db.Exec(query, string(assertion), assertionId)
+	_, err = db.Exec(query, values...)
 	if err != nil {
 		return err
 	}
 
 	return nil
-}
+}           
 
 
 

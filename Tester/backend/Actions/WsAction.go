@@ -12,17 +12,31 @@ import (
 
 
 type WSOpts struct {
-	URL     string           
-	
+	URL         string
+	EventType   string
+	ConnectOpts WSConnectOpts
+	SendOpts    WSSendOpts
+	ReceiveOpts WSReceiveOpts
 }
 
 type WSAction struct {
-	ActionID    int64  
-	AppID       int64  
-	ActionName  string 
-	ExecutorType string 
-	Opts        WSOpts 
-	EnvironmentId int64 
+	ActionID      int64
+	AppID         int64
+	ActionName    string
+	Opts          WSOpts
+	EnvironmentID int64
+}
+
+type WSConnectOpts struct {
+	EventUrl string
+}
+
+type WSSendOpts struct {
+	EventUrl string
+}
+
+type WSReceiveOpts struct {
+	EventUrl string
 }
 
 
