@@ -4,40 +4,37 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 )
 
 
-
-
-
-
 type WSOpts struct {
-	URL         string
-	EventType   string
-	ConnectOpts WSConnectOpts
-	SendOpts    WSSendOpts
-	ReceiveOpts WSReceiveOpts
+    URL               string
+    Headers           map[string]string
+    QueryParams       map[string]string
+    Subprotocols      []string
+    Messages          []WSMessage
+    HandshakeTimeout  time.Duration
+    WriteTimeout      time.Duration
 }
+
+type WSMessage struct {
+    MessageID   int64
+    Sequence    int
+    MessageType string
+    Payload     json.RawMessage
+}
+
+
 
 type WSAction struct {
-	ActionID      int64
-	AppID         int64
-	ActionName    string
-	Opts          WSOpts
-	EnvironmentID int64
+    ActionID      int64
+    AppID         int64
+    ActionName    string
+    Opts          WSOpts
+    EnvironmentID int64
 }
 
-type WSConnectOpts struct {
-	EventUrl string
-}
-
-type WSSendOpts struct {
-	EventUrl string
-}
-
-type WSReceiveOpts struct {
-	EventUrl string
-}
 
 
 func CreateWSAction(db *sql.DB, app_id int64, action_name string, executor_type string, opts WSOpts, environment_id int64) (int64, error) {
@@ -79,9 +76,8 @@ func GetWSAction(db *sql.DB, action_id int64) (WSAction, error) {
         &action.ActionID,
         &action.AppID,
         &action.ActionName,
-        &action.ExecutorType,
         &optsJSON,
-        &action.EnvironmentId,
+        &action.EnvironmentID,
     )
     if err != nil {
         return action, err

@@ -15,6 +15,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 
@@ -24,7 +26,10 @@ type Tester struct {
 	SequenceState           *SequnceState
 	ReqExecutionContext     map[int]RequestExecutionContext
 	SequnceExecutionContext map[int][]ActionContext
+	WebsocketManager	map[int64]*websocket.Conn
 }
+
+
 
 func NewTester() (*Tester, error) {
 	jar, err := cookiejar.New(nil)
@@ -41,8 +46,9 @@ func NewTester() (*Tester, error) {
 			State: make(map[int64][]ActionResponse),
 			Order: []int64{},
 		},
-		ReqExecutionContext:     make(map[int]RequestExecutionContext),
-		SequnceExecutionContext: make(map[int][]ActionContext),
+		ReqExecutionContext:      make(map[int]RequestExecutionContext),
+		SequnceExecutionContext:  make(map[int][]ActionContext),
+		WebsocketManager:    make(map[int]*websocket.Conn),
 	}, nil
 }
 
@@ -164,8 +170,20 @@ func (t *Tester) ExecuteAction(ctx context.Context, db *sql.DB, action_id int64,
 
         return response, nil
 
-    case "websocket":
-        return nil, fmt.Errorf("websocket execution is not implemented")
+    case "websocket"://only for ws connection 
+		action, err := actions.GetWSAction(db, action_id)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get websocket action: %w", err)
+		}
+
+		conn, _, err := websocket.DefaultDialer.Dial(action.Opts.URL, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to establish websocket connection: %w", err)
+		}
+
+		t.WebsocketManager[action_id] = conn
+
+        return nil, fmt.Errorf("websocket connection established")
 
     default:
         return nil, fmt.Errorf("unsupported action type: %s", action_type)
@@ -266,3 +284,8 @@ func (t *Tester) CancelSequence(sequenceContextID int) error {
 
 	return nil
 }
+
+
+
+func ExecuteWsAction 
+
