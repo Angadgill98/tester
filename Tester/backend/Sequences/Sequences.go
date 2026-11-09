@@ -8,41 +8,48 @@ import (
 )
 
 
+type SequenceObj struct {
+	Db *sql.DB
+}
+
+func NewSequenceObj(db *sql.DB) *SequenceObj {
+	return &SequenceObj{Db: db}
+}
+
 type Sequence struct {
-	SequenceID   int64   
-	AppID        int64   
-	SequenceName string  
-	ActionIDs    []int64 
+	SequenceID   int64
+	AppID        int64
+	SequenceName string
+	ActionIDs    []int64
 }
 
+func (s *SequenceObj) CreateSequence(sequence_name string, app_id int64) (Sequence, error) {
+	sequence := Sequence{
+		AppID:        app_id,
+		SequenceName: sequence_name,
+		ActionIDs:    []int64{},
+	}
 
-func CreateSequence(db *sql.DB, sequence_name string, app_id int64) (Sequence, error) {
-    sequence := Sequence{
-        AppID:        app_id,
-        SequenceName: sequence_name,
-        ActionIDs:    []int64{},
-    }
+	actionIDs, err := json.Marshal(sequence.ActionIDs)
+	if err != nil {
+		return Sequence{}, err
+	}
 
-    actionIDs, err := json.Marshal(sequence.ActionIDs)
-    if err != nil {
-        return Sequence{}, err
-    }
+	query, values := BuildInsertQuery("sequences", map[string]any{
+		"app_id":        sequence.AppID,
+		"sequence_name": sequence.SequenceName,
+		"action_ids":    string(actionIDs),
+	}, []string{"sequence_id"})
 
-    query, values := BuildInsertQuery("sequences", map[string]any{
-        "app_id":        sequence.AppID,
-        "sequence_name": sequence.SequenceName,
-        "action_ids":    string(actionIDs),
-    }, []string{"sequence_id"})
+	err = s.Db.QueryRow(query, values...).Scan(&sequence.SequenceID)
+	if err != nil {
+		return Sequence{}, err
+	}
 
-    err = db.QueryRow(query, values...).Scan(&sequence.SequenceID)
-    if err != nil {
-        return Sequence{}, err
-    }
-
-    return sequence, nil
+	return sequence, nil
 }
 
-func CreateTemporarySequence(sequence_name string, app_id int64) Sequence {
+func (s *SequenceObj) CreateTemporarySequence(sequence_name string, app_id int64) Sequence {
 	return Sequence{
 		SequenceID:   0,
 		AppID:        999999,
@@ -51,57 +58,111 @@ func CreateTemporarySequence(sequence_name string, app_id int64) Sequence {
 	}
 }
 
-func GetSequence(db *sql.DB, sequence_id int64) (Sequence, error) {
-    query, values := BuildSelectQuery("sequences", []string{
-        "sequence_id", "app_id", "sequence_name", "action_ids",
-    }, map[string][]any{
-        "sequence_id": {"=", sequence_id},
-    })
+func (s *SequenceObj) GetSequence(sequence_id int64) (Sequence, error) {
+	query, values := BuildSelectQuery("sequences", []string{
+		"sequence_id", "app_id", "sequence_name", "action_ids",
+	}, map[string][]any{
+		"sequence_id": {"=", sequence_id},
+	})
 
-    var sequence Sequence
-    var actionIDs string
+	var sequence Sequence
+	var actionIDs string
 
-    err := db.QueryRow(query, values...).Scan(
-        &sequence.SequenceID,
-        &sequence.AppID,
-        &sequence.SequenceName,
-        &actionIDs,
+	err := s.Db.QueryRow(query, values...).Scan(
+		&sequence.SequenceID,
+		&sequence.AppID,
+		&sequence.SequenceName,
+		&actionIDs,
+	)
+	if err != nil {
+		return Sequence{}, err
+	}
+
+	if err := json.Unmarshal([]byte(actionIDs), &sequence.ActionIDs); err != nil {
+		return Sequence{}, err
+	}
+
+	return sequence, nil
+}
+
+func (s *SequenceObj) GetSequences(sequenceIDs []int64) ([]Sequence, error) {
+    if len(sequenceIDs) == 0 {
+        return []Sequence{}, nil
+    }
+
+    placeholders := make([]string, len(sequenceIDs))
+    values := make([]any, len(sequenceIDs))
+
+    for i, id := range sequenceIDs {
+        placeholders[i] = "?"
+        values[i] = id
+    }
+
+    query := fmt.Sprintf(
+        "SELECT sequence_id, app_id, sequence_name, action_ids FROM sequences WHERE sequence_id IN (%s)",
+        strings.Join(placeholders, ", "),
     )
+
+    rows, err := s.Db.Query(query, values...)
     if err != nil {
-        return Sequence{}, err
+        return nil, err
+    }
+    defer rows.Close()
+
+    sequencesList := make([]Sequence, 0, len(sequenceIDs))
+
+    for rows.Next() {
+        var sequence Sequence
+        var actionIDs string
+
+        err := rows.Scan(
+            &sequence.SequenceID,
+            &sequence.AppID,
+            &sequence.SequenceName,
+            &actionIDs,
+        )
+        if err != nil {
+            return nil, err
+        }
+
+        if err := json.Unmarshal([]byte(actionIDs), &sequence.ActionIDs); err != nil {
+            return nil, err
+        }
+
+        sequencesList = append(sequencesList, sequence)
     }
 
-    if err := json.Unmarshal([]byte(actionIDs), &sequence.ActionIDs); err != nil {
-        return Sequence{}, err
+    if err := rows.Err(); err != nil {
+        return nil, err
     }
 
-    return sequence, nil
+    return sequencesList, nil
 }
 
-func UpdateSequence(db *sql.DB, sequence_id int64, sequence_name string, action_ids []int64) error {
-    actionIDs, err := json.Marshal(action_ids)
-    if err != nil {
-        return err
-    }
+func (s *SequenceObj) UpdateSequence(sequence_id int64, sequence_name string, action_ids []int64) error {
+	actionIDs, err := json.Marshal(action_ids)
+	if err != nil {
+		return err
+	}
 
-    query, values := BuildUpdateQuery("sequences", map[string]any{
-        "sequence_name": sequence_name,
-        "action_ids":    string(actionIDs),
-    }, map[string][]any{
-        "sequence_id": {"=", sequence_id},
-    })
+	query, values := BuildUpdateQuery("sequences", map[string]any{
+		"sequence_name": sequence_name,
+		"action_ids":    string(actionIDs),
+	}, map[string][]any{
+		"sequence_id": {"=", sequence_id},
+	})
 
-    _, err = db.Exec(query, values...)
-    return err
+	_, err = s.Db.Exec(query, values...)
+	return err
 }
 
-func DeleteSequence(db *sql.DB, sequence_id int64) error {
-    query, values := BuildDeleteQuery("sequences", map[string][]any{
-        "sequence_id": {"=", sequence_id},
-    })
+func (s *SequenceObj) DeleteSequence(sequence_id int64) error {
+	query, values := BuildDeleteQuery("sequences", map[string][]any{
+		"sequence_id": {"=", sequence_id},
+	})
 
-    _, err := db.Exec(query, values...)
-    return err
+	_, err := s.Db.Exec(query, values...)
+	return err
 }
 
 func BuildInsertQuery(table string, data map[string]any, returningColumns []string) (string, []any) {

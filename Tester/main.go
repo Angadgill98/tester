@@ -26,6 +26,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	err=InitializeGlobalEnv(db)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// Create application with options
 	err = wails.Run(&options.App{
@@ -44,7 +48,6 @@ func main() {
 		OnStartup:        app.startup,
 		Bind: []interface{}{
 			app,
-			app.App,
 		},
 	})
 

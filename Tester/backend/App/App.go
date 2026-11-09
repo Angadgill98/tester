@@ -282,3 +282,7 @@ func BuildDeleteQuery(table string, conditions map[string][]any) (string, []any)
     return query, values
 }
 
+
+
+
+

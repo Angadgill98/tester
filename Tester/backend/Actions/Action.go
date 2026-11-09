@@ -13,7 +13,17 @@ type Action struct {
     ActionId   int
 }
 
-func CreateAction(db *sql.DB, action_type string, action_id int) error {
+type ActionObj struct {
+	Db *sql.DB
+}
+
+func NewActionObj(db *sql.DB) *ActionObj {
+	return &ActionObj{
+		Db: db,
+	}
+}
+
+func (a *ActionObj) CreateAction(db *sql.DB, action_type string, action_id int) error {
     query, values := BuildInsertQuery("actions", map[string]any{
         "action_type": action_type,
         "action_id":   action_id,
@@ -23,7 +33,7 @@ func CreateAction(db *sql.DB, action_type string, action_id int) error {
     return err
 }
 
-func GetActions(db *sql.DB, actionIDs []int64) ([]Action, error) {
+func (a *ActionObj) GetActions(db *sql.DB, actionIDs []int64) ([]Action, error) {
     actionsList := make([]Action, 0, len(actionIDs))
 
     for _, actionID := range actionIDs {
@@ -43,15 +53,15 @@ func GetActions(db *sql.DB, actionIDs []int64) ([]Action, error) {
     return actionsList, nil
 }
 
-func RegisterHTTPAction(db *sql.DB, actionID int) error {
-    return CreateAction(db, "http", actionID)
+func (a *ActionObj) RegisterHTTPAction(db *sql.DB, actionID int) error {
+    return a.CreateAction(db, "http", actionID)
 }
 
-func RegisterWSAction(db *sql.DB, actionID int) error {
-    return CreateAction(db, "websocket", actionID)
+func (a *ActionObj) RegisterWSAction(db *sql.DB, actionID int) error {
+    return a.CreateAction(db, "websocket", actionID)
 }
 
-func GetActionType(db *sql.DB, action_id int) (string, error) {
+func (a *ActionObj) GetActionType(db *sql.DB, action_id int) (string, error) {
     query, values := BuildSelectQuery(
         "actions",
         []string{"action_type"},
@@ -70,7 +80,7 @@ func GetActionType(db *sql.DB, action_id int) (string, error) {
     return action_type, nil
 }
 
-func DeleteAction(db *sql.DB, actionID int64) error {
+func (a *ActionObj) DeleteAction(db *sql.DB, actionID int64) error {
     query, values := BuildDeleteQuery("actions", map[string][]any{
         "action_id": {"=", actionID},
     })

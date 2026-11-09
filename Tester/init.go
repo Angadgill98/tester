@@ -41,7 +41,19 @@ func InitializeGlobalApp(db *sql.DB) error {
 	_, err := db.Exec(query)
 	return err
 }
+func InitializeGlobalEnv(db *sql.DB) error {
+    query := `INSERT OR IGNORE INTO environments (environment_id, environment_name, keys_values) VALUES (0, 'Global', '{}')`
 
+    _, err := db.Exec(query)
+    if err != nil {
+        return err
+    }
+
+    query = `UPDATE applications SET environment_id = 0 WHERE id = 0`
+
+    _, err = db.Exec(query)
+    return err
+}
 func SetupApplicationsTable(db *sql.DB) error {
 	_, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS applications (

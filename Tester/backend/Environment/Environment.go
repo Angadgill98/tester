@@ -24,6 +24,7 @@ func CreateEnvironment(environment_name string) Environment {
     }
 }
 
+
 func GetEnvironment(db *sql.DB, environmentID int) (Environment, error) {
     query, values := BuildSelectQuery("environments", []string{
         "environment_id",

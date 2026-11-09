@@ -1,7 +1,9 @@
 package main
 
 import (
+	actions "Tester/backend/Actions"
 	app "Tester/backend/App"
+	sequences "Tester/backend/Sequences"
 	"context"
 	"database/sql"
 	"fmt"
@@ -12,6 +14,8 @@ type App struct {
 	ctx context.Context
 	Db *sql.DB
 	App *app.ApplicationObj
+	Action *actions.ActionObj
+	Sequence *sequences.SequenceObj
 }
 
 // NewApp creates a new App application struct
@@ -19,6 +23,8 @@ func NewApp(db *sql.DB) *App {
 	return &App{
 		Db: db,
 		App: app.CreateApplicationObject(db),
+		Action: actions.NewActionObj(db),
+		Sequence: sequences.NewSequenceObj(db),
 	}
 }
 
