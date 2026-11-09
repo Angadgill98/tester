@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -48,7 +49,7 @@ func NewTester() (*Tester, error) {
 		},
 		ReqExecutionContext:      make(map[int]RequestExecutionContext),
 		SequnceExecutionContext:  make(map[int][]ActionContext),
-		WebsocketManager:    make(map[int]*websocket.Conn),
+		WebsocketManager:    make(map[int64]*websocket.Conn),
 	}, nil
 }
 
@@ -165,36 +166,81 @@ func (t *Tester) ExecuteAction(ctx context.Context, db *sql.DB, action_id int64,
 
         response, err := t.ExecuteHttpAction(ctx, action, db)
         if err != nil {
-            return nil, fmt.Errorf("failed to execute HTTP action: %w", err)
+            return response, fmt.Errorf("failed to execute HTTP action: %w", err)
         }
 
         return response, nil
 
-    case "websocket"://only for ws connection 
-		action, err := actions.GetWSAction(db, action_id)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get websocket action: %w", err)
-		}
+    case "websocket":
+        action, err := actions.GetWSAction(db, action_id)
+        if err != nil {
+            return nil, fmt.Errorf("failed to get WebSocket action: %w", err)
+        }
 
-		conn, _, err := websocket.DefaultDialer.Dial(action.Opts.URL, nil)
-		if err != nil {
-			return nil, fmt.Errorf("failed to establish websocket connection: %w", err)
-		}
+        conn := t.WebsocketManager[action_id]
 
-		t.WebsocketManager[action_id] = conn
+        if conn == nil {
+            var response *http.Response
+            conn, response, err = t.CreateWebSocketConnection(ctx, action, db)
+            if err != nil {
+                return nil, err
+            }
 
-        return nil, fmt.Errorf("websocket connection established")
+            t.WebsocketManager[action_id] = conn
+
+            _ = response
+        }
+
+        return t.ExecuteWsAction(ctx, action, conn, db)
 
     default:
         return nil, fmt.Errorf("unsupported action type: %s", action_type)
     }
 }
 
+func (t *Tester) CreateWebSocketConnection(ctx context.Context, action actions.WSAction, db *sql.DB) (*websocket.Conn, *http.Response, error) {
+    env, err := environment.GetEnvironment(db, int(action.EnvironmentID))
+    if err != nil {
+        return nil, nil, fmt.Errorf("failed to get environment: %w", err)
+    }
+
+    opts := action.Opts
+    opts.URL = ReplaceEnvironmentVariables(opts.URL, env.KeysValues)
+
+    wsURL, err := url.Parse(opts.URL)
+    if err != nil {
+        return nil, nil, fmt.Errorf("invalid websocket URL: %w", err)
+    }
+
+    query := wsURL.Query()
+    for key, value := range opts.QueryParams {
+        query.Set(key, ReplaceEnvironmentVariables(value, env.KeysValues))
+    }
+    wsURL.RawQuery = query.Encode()
+
+    headers := http.Header{}
+    for key, value := range opts.Headers {
+        headers.Set(key, ReplaceEnvironmentVariables(value, env.KeysValues))
+    }
+
+    dialer := websocket.Dialer{
+        HandshakeTimeout: opts.HandshakeTimeout,
+        Subprotocols:     opts.Subprotocols,
+    }
+
+    conn, resp, err := dialer.DialContext(ctx, wsURL.String(), headers)
+    if err != nil {
+        return nil, resp, fmt.Errorf("failed to establish websocket connection: %w", err)
+    }
+
+    return conn, resp, nil
+}
+
 
 func (t *Tester) ExecuteHttpAction(ctx context.Context, action actions.HttpAction, db *sql.DB) (*ActionResponse, error) {
     env, err := environment.GetEnvironment(db, int(action.EnvironmentId))
     if err != nil {
-        return nil, fmt.Errorf("failed to get environment: %w", err)
+        return &ActionResponse{Success: false, Message: fmt.Sprintf("failed to get environment: %v", err)}, fmt.Errorf("failed to get environment: %w", err)
     }
 
     opts := action.Opts
@@ -203,7 +249,7 @@ func (t *Tester) ExecuteHttpAction(ctx context.Context, action actions.HttpActio
 
     reqURL, err := url.Parse(opts.URL)
     if err != nil {
-        return nil, fmt.Errorf("invalid request URL: %w", err)
+        return &ActionResponse{Success: false, Message: fmt.Sprintf("invalid request URL: %v", err)}, fmt.Errorf("invalid request URL: %w", err)
     }
 
     query := reqURL.Query()
@@ -220,7 +266,7 @@ func (t *Tester) ExecuteHttpAction(ctx context.Context, action actions.HttpActio
 
     req, err := http.NewRequestWithContext(ctx, opts.Method, reqURL.String(), strings.NewReader(body))
     if err != nil {
-        return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+        return &ActionResponse{Success: false, Message: fmt.Sprintf("failed to create HTTP request: %v", err)}, fmt.Errorf("failed to create HTTP request: %w", err)
     }
 
     for key, value := range opts.Headers {
@@ -229,16 +275,25 @@ func (t *Tester) ExecuteHttpAction(ctx context.Context, action actions.HttpActio
 
     resp, err := t.Client.Do(req)
     if err != nil {
-        return nil, fmt.Errorf("HTTP request failed: %w", err)
+        return &ActionResponse{Success: false, Message: fmt.Sprintf("HTTP request failed: %v", err)}, fmt.Errorf("HTTP request failed: %w", err)
     }
     defer resp.Body.Close()
 
     responseBody, err := io.ReadAll(resp.Body)
     if err != nil {
-        return nil, fmt.Errorf("failed to read response body: %w", err)
+        return &ActionResponse{
+            Success:    false,
+            Message:    fmt.Sprintf("failed to read response body: %v", err),
+            StatusCode: resp.StatusCode,
+            Status:     resp.Status,
+            Headers:    resp.Header,
+            Cookies:    resp.Cookies(),
+        }, fmt.Errorf("failed to read response body: %w", err)
     }
 
     response := &ActionResponse{
+        Success:    true,
+        Message:    "HTTP request executed successfully",
         Body:       string(responseBody),
         StatusCode: resp.StatusCode,
         Status:     resp.Status,
@@ -285,7 +340,85 @@ func (t *Tester) CancelSequence(sequenceContextID int) error {
 	return nil
 }
 
+func (t *Tester) ExecuteWsAction(ctx context.Context, action actions.WSAction, conn *websocket.Conn, db *sql.DB) (*ActionResponse, error) {
+    env, err := environment.GetEnvironment(db, int(action.EnvironmentID))
+    if err != nil {
+        return &ActionResponse{Success: false, Message: err.Error()}, err
+    }
 
+    opts := action.Opts
 
-func ExecuteWsAction 
+    response := &ActionResponse{
+        Success: true,
+        Message: "WebSocket connection established successfully",
+        Data:    make(map[string]any),
+    }
 
+    messages := append([]actions.WSMessage(nil), opts.Messages...)
+    sort.Slice(messages, func(i, j int) bool {
+        return messages[i].Sequence < messages[j].Sequence
+    })
+
+    for _, message := range messages {
+        payload := ReplaceEnvironmentVariables(string(message.Payload), env.KeysValues)
+
+        messageType := websocket.TextMessage
+
+        if strings.EqualFold(message.MessageType, "BINARY") {
+            messageType = websocket.BinaryMessage
+        } else if !strings.EqualFold(message.MessageType, "TEXT") {
+            err := fmt.Errorf("unsupported websocket message type: %s", message.MessageType)
+            response.Success = false
+            response.Message = err.Error()
+            return response, err
+        }
+
+        if opts.WriteTimeout > 0 {
+            conn.SetWriteDeadline(time.Now().Add(opts.WriteTimeout))
+        }
+
+        if err := conn.WriteMessage(messageType, []byte(payload)); err != nil {
+            response.Success = false
+            response.Message = fmt.Sprintf("failed to send websocket message: %v", err)
+            return response, err
+        }
+    }
+
+    response.Message = "WebSocket messages sent successfully"
+
+    return response, nil
+}
+
+func (t *Tester) ListenWebSocket(ctx context.Context, actionID int64, conn *websocket.Conn) {
+    go func() {
+        <-ctx.Done()
+        conn.Close()
+    }()
+
+    for {
+        select {
+        case <-ctx.Done():
+            return
+        default:
+        }
+
+        messageType, message, err := conn.ReadMessage()
+        if err != nil {
+            if ctx.Err() != nil {
+                return
+            }
+
+            fmt.Printf("WebSocket Action ID %d read error: %v\n", actionID, err)
+            return
+        }
+
+        messageTypeName := "TEXT"
+        if messageType == websocket.BinaryMessage {
+            messageTypeName = "BINARY"
+        }
+
+        fmt.Printf("Action ID: %d\n", actionID)
+        fmt.Printf("Message Type: %s\n", messageTypeName)
+        fmt.Printf("Message: %s\n", string(message))
+    }
+}

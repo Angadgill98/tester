@@ -1,18 +1,25 @@
 package main
 
 import (
+	app "Tester/backend/App"
 	"context"
+	"database/sql"
 	"fmt"
 )
 
 // App struct
 type App struct {
 	ctx context.Context
+	Db *sql.DB
+	App *app.ApplicationObj
 }
 
 // NewApp creates a new App application struct
-func NewApp() *App {
-	return &App{}
+func NewApp(db *sql.DB) *App {
+	return &App{
+		Db: db,
+		App: app.CreateApplicationObject(db),
+	}
 }
 
 // startup is called when the app starts. The context is saved

@@ -1,26 +1,30 @@
 import {useState} from 'react';
 import logo from './assets/images/logo-universal.png';
 import './App.css';
-import {Greet} from "../wailsjs/go/main/App";
+import {Greet} from "../../../Tester/frontend/wailsjs/go/main/App";
+import MainSideBar from './components/Sidebar/MainSideBar';
+import Tester from './components/Tester/Tester';
+
+
+export let SidebarClasses = {
+    container:"sidebar-container",
+    container_closed:"sidebar-container-closed",
+    trigger:"sidebar-trigger",
+    button:"sidebar-button",
+    
+}
+
+export let TesterClasses={
+    container:"tester-container"
+}
 
 function App() {
-    const [resultText, setResultText] = useState("Please enter your name below 👇");
-    const [name, setName] = useState('');
-    const updateName = (e: any) => setName(e.target.value);
-    const updateResultText = (result: string) => setResultText(result);
-
-    function greet() {
-        Greet(name).then(updateResultText);
-    }
+    let [isTester,setTester]=useState<boolean>(true)
 
     return (
         <div id="App">
-            <img src={logo} id="logo" alt="logo"/>
-            <div id="result" className="result">{resultText}</div>
-            <div id="input" className="input-box">
-                <input id="name" className="input" onChange={updateName} autoComplete="off" name="input" type="text"/>
-                <button className="btn" onClick={greet}>Greet</button>
-            </div>
+            <MainSideBar/>
+            {isTester ? <Tester/> :<></>}
         </div>
     )
 }

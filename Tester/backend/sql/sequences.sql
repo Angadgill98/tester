@@ -4,5 +4,5 @@ CREATE TABLE IF NOT EXISTS sequences (
     sequence_name TEXT NOT NULL,
     action_ids TEXT NOT NULL,
 
-    FOREIGN KEY (app_id) REFERENCES apps(app_id)
+    FOREIGN KEY (app_id) REFERENCES applications(app_id)
 );

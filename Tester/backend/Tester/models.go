@@ -14,12 +14,14 @@ type SequnceState struct {
 }
 
 type ActionResponse struct {
-	Body       string
-	StatusCode int
-	Status     string
-	Headers    http.Header
-	Cookies    []*http.Cookie
-	Data       map[string]any
+    Success    bool
+    Message    string
+    Body       string
+    StatusCode int
+    Status     string
+    Headers    http.Header
+    Cookies    []*http.Cookie
+    Data       map[string]any
 }
 
 

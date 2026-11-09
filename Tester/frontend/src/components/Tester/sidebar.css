@@ -1,0 +1,10 @@
+.tester-sidebar-container{
+    height: 100vh;
+    width: 17%;
+
+    display: flex;
+    flex-direction: column;
+
+
+    background-color: bisque;
+}
