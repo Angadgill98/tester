@@ -53,3 +53,48 @@
     width: 100vw;
     z-index: 9999;
 }
+
+
+
+.sidebar-list-container{
+    display: flex;
+    flex-direction: column;
+
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+
+    box-sizing: border-box;
+
+
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.sidebar-list-item {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+
+    border: 1px solid #ccc;
+    box-sizing: border-box;
+
+
+    background-color: aquamarine;
+}
+
+
+.sidebarlisticon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 15%;
+ 
+    background-color: burlywood;
+}
+
+.sidebar-list-item-name{
+    width: 100%;
+
+    background-color: cadetblue;
+}

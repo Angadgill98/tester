@@ -1,8 +1,6 @@
+
 import { create } from "zustand";
 import { Action_f, Application_f, ChildApplicationInfo, Environment_f, Sequence_f } from "./models/application";
-
-
-
 
 interface GlobalStore {
     Applications: Map<number, Application_f>;
@@ -12,7 +10,7 @@ interface GlobalStore {
     ChildApplications: Map<number, ChildApplicationInfo>;
 
     GlobalApplication: Application_f | null;
-    CurrentApplication: Application_f | null;
+    CurrentApplicationId: number | null;
 
     setApplications: (id: number, app: Application_f) => void;
     setActions: (id: number, action: Action_f) => void;
@@ -21,10 +19,12 @@ interface GlobalStore {
     setChildApplications: (id: number, child: ChildApplicationInfo) => void;
 
     setGlobalApplication: (app: Application_f | null) => void;
-    setCurrentApplication: (app: Application_f | null) => void;
+    setCurrentApplicationId: (id: number | null) => void;
+    getCurrentApplicationId: () => number | null;
+    getCurrentApplication: () => Application_f | undefined;
 }
 
-export const useGlobalStore = create<GlobalStore>((set) => ({
+export const useGlobalStore = create<GlobalStore>((set, get) => ({
     Applications: new Map<number, Application_f>(),
     Actions: new Map<number, Action_f>(),
     Sequences: new Map<number, Sequence_f>(),
@@ -32,7 +32,7 @@ export const useGlobalStore = create<GlobalStore>((set) => ({
     ChildApplications: new Map<number, ChildApplicationInfo>(),
 
     GlobalApplication: null,
-    CurrentApplication: null,
+    CurrentApplicationId: null,
 
     setApplications: (id, app) => set((state) => {
         const applications = new Map(state.Applications);
@@ -65,5 +65,16 @@ export const useGlobalStore = create<GlobalStore>((set) => ({
     }),
 
     setGlobalApplication: (app) => set({ GlobalApplication: app }),
-    setCurrentApplication: (app) => set({ CurrentApplication: app })
+
+    setCurrentApplicationId: (id) => set({ CurrentApplicationId: id }),
+
+    getCurrentApplicationId: () => get().CurrentApplicationId,
+    
+    getCurrentApplication: () => {
+    const state = get();
+
+    if (state.CurrentApplicationId === null) return undefined;
+
+    return state.Applications.get(state.CurrentApplicationId);
+}
 }));

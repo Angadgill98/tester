@@ -4,10 +4,26 @@ import { GetApplication,CreateHttpAction,CreateWSAction,GetApplications } from "
 import "./sidebar.css"
 import { useGlobalStore } from '../../global';
 import { Action_f, Application_f, ChildApplicationInfo, Environment_f, Sequence_f } from '../../models/application';
+
+
+let ListTemplateClasses = {
+    container: "sidebar-list-container",
+    item: "sidebar-list-item",
+    icon: "sidebarlisticon"
+};
 const Sidebar = () => {
 
-    const { setApplications, setActions, setSequences, setChildApplications ,CurrentApplication} = useGlobalStore()
+    const setApplications = useGlobalStore(state => state.setApplications);
+    const setActions = useGlobalStore(state => state.setActions);
+    const setSequences = useGlobalStore(state => state.setSequences);
+    const setChildApplications = useGlobalStore(state => state.setChildApplications);
 
+    const GlobalApplication = useGlobalStore(state => state.GlobalApplication);
+
+    const setGlobalApplication = useGlobalStore(state => state.setGlobalApplication);
+    
+    const setCurrentApplicationId=useGlobalStore(state => state.setCurrentApplicationId);
+    
     useEffect(() => {
         const fetchApplication = async () => {
             try {
@@ -77,7 +93,7 @@ const Sidebar = () => {
                 const rootApplication = store.Applications.get(0) ?? null;
 
                 store.setGlobalApplication(rootApplication);
-                store.setCurrentApplication(rootApplication);
+                store.setCurrentApplicationId(rootApplication?.AppId ?? null);
 
                 console.log("Applications:", store.Applications);
                 console.log("Actions:", store.Actions);
@@ -97,7 +113,29 @@ const Sidebar = () => {
     let [showApplications, setApplicationShow] = useState<boolean>(false);
     let [showSequences, setSequenceShow] = useState<boolean>(false);
 
+    const addActionToStore = (applicationId: number, actionId: number, actionName: string, actionType: string) => {
+        const store = useGlobalStore.getState();
+        const application = store.Applications.get(applicationId);
 
+        if (!application) return;
+
+        setActions(actionId, {
+            Id: actionId,
+            Name: actionName,
+            Type: actionType
+        });
+
+        const updatedApplication = {
+            ...application,
+            Actions: [...application.Actions, actionId]
+        };
+
+        setApplications(applicationId, updatedApplication);
+
+        if (store.GlobalApplication?.AppId === applicationId) {
+            setGlobalApplication(updatedApplication);
+        }
+    };
   const handleCreateAction = () => {
         setActionShow(prev => !prev);
     };
@@ -110,31 +148,45 @@ const Sidebar = () => {
       setSequenceShow(prev => !prev);
   };
 
-  let handleCreateHttp = async () => {
-    const res = await CreateHttpAction("New_Action", "http", CurrentApplication!.AppId);
+    const handleCreateHttp = async () => {
+        const currentApplication = useGlobalStore.getState().getCurrentApplication();
 
-    if (!res.Success) {
-        console.error(res.Error);
-        return;
-    }
+        if (!currentApplication) return;
 
-    console.log("Created action ID:", res.Data);
-    setActionShow(prev => !prev);
+        const applicationId = currentApplication.AppId;
 
+        const res = await CreateHttpAction("New_Action", "http", applicationId);
 
-  };
+        if (!res.Success) {
+            console.error(res.Error);
+            return;
+        }
 
-  let handleCreateWs=async ()=>{
-    const res = await CreateWSAction("New_Action", "ws", CurrentApplication!.AppId);
+        addActionToStore(applicationId, res.Data, "New_Action", "http");
 
-    if (!res.Success) {
-        console.error(res.Error);
-        return;
-    }
+        console.log("Created action ID:", res.Data);
+        setActionShow(false);
+    };
 
-    console.log("Created WebSocket action ID:", res.Data);
-    setActionShow(prev => !prev);
-  }
+    const handleCreateWs = async () => {
+        const currentApplication = useGlobalStore.getState().getCurrentApplication();
+
+        if (!currentApplication) return;
+
+        const applicationId = currentApplication.AppId;
+
+        const res = await CreateWSAction("New_Action", "ws", applicationId);
+
+        if (!res.Success) {
+            console.error(res.Error);
+            return;
+        }
+
+        addActionToStore(applicationId, res.Data, "New_Action", "ws");
+
+        console.log("Created WebSocket action ID:", res.Data);
+        setActionShow(false);
+    };
 
   return (
     <div className={TesterSidebarClasses.container}>
@@ -183,9 +235,13 @@ const Sidebar = () => {
 
         </div>
 
-        <div>GLOBAL</div>
+        <div onClick={() => setCurrentApplicationId(GlobalApplication?.AppId ?? null)}>
+            GLOBAL
+        </div>
 
+                {GlobalApplication ? (<SidebarTemplate application={GlobalApplication} classes={ListTemplateClasses} />) : (<></>)}
 
+                
         
     </div>
   )
@@ -198,76 +254,116 @@ export default Sidebar
 
 interface SidebarTemplateProps {
     application: Application_f;
+    classes:any
 }
 
-const SidebarTemplate = ({ application }: SidebarTemplateProps) => {
-    const ChildApplications = useGlobalStore(state => state.ChildApplications);
-    const Actions = useGlobalStore(state => state.Actions);
-    const Sequences = useGlobalStore(state => state.Sequences);
+const SidebarTemplate = React.memo(({ application, classes }: SidebarTemplateProps) => {
+    const setCurrentApplicationId = useGlobalStore(state => state.setCurrentApplicationId);
+
+    const setcurretnappid = () => {
+        setCurrentApplicationId(application.AppId);
+    };
+
+    const store = useGlobalStore.getState();
+
     return (
-        <div>
+        <div className={classes.container} >
             {application.Children.map(childId => {
-            const child = ChildApplications.get(childId);
+                const child = store.ChildApplications.get(childId);
 
-            if (!child) return null;
+                if (!child) return null;
 
-            return (
-                <SidebarApplicationTemplate key={child.Id} application={child} />
-            );
-        })}
+                return (
+                    <SidebarApplicationTemplate key={child.Id} application={child} />
+                );
+            })}
 
-        {application.Actions.map(actionId => {
-            const action = Actions.get(actionId);
+            {application.Actions.map(actionId => {
+                const action = store.Actions.get(actionId);
 
-            if (!action) return null;
+                if (!action) return null;
 
-            return (
-                <SidebarActionTemplate key={action.Id} action={action} />
-            );
-        })}
+                return <SidebarActionTemplate key={action.Id} action={action} updatecurrentappid={setcurretnappid} />;
+            })}
 
-        {application.Sequences.map(sequenceId => {
-            const sequence = Sequences.get(sequenceId);
+            {application.Sequences.map(sequenceId => {
+                const sequence = store.Sequences.get(sequenceId);
 
-            if (!sequence) return null;
+                if (!sequence) return null;
 
-            return (
-                <SidebarSequenceTemplate key={sequence.Id} sequence={sequence} />
-            );
-        })}
+                return <SidebarSequenceTemplate key={sequence.Id} sequence={sequence} updatecurrentappid={setcurretnappid} />;
+            })}
         </div>
     );
-};
+});
 
 interface SidebarActionTemplateProps {
     action: Action_f;
+    updatecurrentappid: () => void;
 }
 
 interface SidebarSequenceTemplateProps {
     sequence: Sequence_f;
+    updatecurrentappid: () => void;
 }
 
 interface SidebarApplicationTemplateProps {
     application: ChildApplicationInfo;
 }
 
-const SidebarActionTemplate = React.memo(({ action }: SidebarActionTemplateProps) => {
+const SidebarActionTemplate = React.memo(({ action, updatecurrentappid }: SidebarActionTemplateProps) => {
     return (
-        <div>
+        <div className={ListTemplateClasses.item} onClick={updatecurrentappid}>
+            <div className={ListTemplateClasses.icon}>
+                {action.Type.toUpperCase()}
+            </div>
+            <p>{action.Name}</p>
         </div>
     );
 });
 
-const SidebarSequenceTemplate = React.memo(({ sequence }: SidebarSequenceTemplateProps) => {
+const SidebarSequenceTemplate = React.memo(({ sequence, updatecurrentappid }: SidebarSequenceTemplateProps) => {
     return (
-        <div>
+        <div className={ListTemplateClasses.item} onClick={updatecurrentappid}>
+            <div className={ListTemplateClasses.icon}>S</div>
+            <div>
+                <p>ID: {sequence.Id}</p>
+                <p>Name: {sequence.Name}</p>
+            </div>
         </div>
     );
 });
 
 const SidebarApplicationTemplate = React.memo(({ application }: SidebarApplicationTemplateProps) => {
+    const [showDetails, setShowDetails] = useState<boolean>(false);
+
+    const applicationData = useGlobalStore(state => state.Applications.get(application.Id));
+    const setCurrentApplicationId = useGlobalStore(state => state.setCurrentApplicationId);
+
+    const handleClick = () => {
+        if (!applicationData) return;
+
+        setCurrentApplicationId(applicationData.AppId);
+        setShowDetails(prev => !prev);
+    };
+
+    if (!applicationData) return null;
+
     return (
-        <div>
+        <div onClick={handleClick}>
+            <div className={ListTemplateClasses.item} >
+                <p>Name: {application.Name}</p>
+                <button type="button">
+                    {showDetails ? "▲" : "▼"}
+                </button>
+            </div>
+
+            {showDetails && (
+                <SidebarTemplate
+                    application={applicationData}
+                    classes={ListTemplateClasses}
+                />
+            )}
         </div>
     );
 });

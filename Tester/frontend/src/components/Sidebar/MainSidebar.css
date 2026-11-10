@@ -21,7 +21,7 @@
 
 .sidebar-trigger{
     width:20px;
-    background-color: beige;
+    /* background-color: beige; */
 
     position: fixed;
     top: 0;
@@ -86,3 +86,5 @@ hr {
     width: 100%;
     margin: 10px 0;
 }
+
+
