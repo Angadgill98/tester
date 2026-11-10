@@ -166,6 +166,74 @@ func (a *ApplicationObj) GetApplicationsByIds(appIds []int64) ([]Application, er
 	return applications, nil
 }
 
+func (a *ApplicationObj) RegisterAction(appId int64, actionId int64) error {
+    application, err := a.GetApplicationById(appId)
+    if err != nil {
+        return err
+    }
+
+    application.Actions = append(application.Actions, actionId)
+
+    actions, err := json.Marshal(application.Actions)
+    if err != nil {
+        return err
+    }
+
+    query, values := BuildUpdateQuery(
+        "applications",
+        map[string]any{"action_ids": string(actions)},
+        map[string][]any{"id": {"=", appId}},
+    )
+
+    _, err = a.Db.Exec(query, values...)
+    return err
+}
+
+func (a *ApplicationObj) RegisterSequence(appId int64, sequenceId int64) error {
+    application, err := a.GetApplicationById(appId)
+    if err != nil {
+        return err
+    }
+
+    application.Sequences = append(application.Sequences, sequenceId)
+
+    sequences, err := json.Marshal(application.Sequences)
+    if err != nil {
+        return err
+    }
+
+    query, values := BuildUpdateQuery(
+        "applications",
+        map[string]any{"sequence_ids": string(sequences)},
+        map[string][]any{"id": {"=", appId}},
+    )
+
+    _, err = a.Db.Exec(query, values...)
+    return err
+}
+
+func (a *ApplicationObj) RegisterChild(appId int64, childId int64) error {
+    application, err := a.GetApplicationById(appId)
+    if err != nil {
+        return err
+    }
+
+    application.Children = append(application.Children, childId)
+
+    children, err := json.Marshal(application.Children)
+    if err != nil {
+        return err
+    }
+
+    query, values := BuildUpdateQuery(
+        "applications",
+        map[string]any{"children": string(children)},
+        map[string][]any{"id": {"=", appId}},
+    )
+
+    _, err = a.Db.Exec(query, values...)
+    return err
+}
 
 func BuildInsertQuery(table string, data map[string]any, returningColumns []string) (string, []any) {
     columns := []string{}

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 
@@ -26,30 +27,26 @@ type HttpActionOpts struct{
 }	
 
 
-func CreateHttpAction(db *sql.DB, action_name string, app_id int64, opts HttpActionOpts, environment_id int64) (int64, error) {
+func (a *ActionObj) CreateHttpAction(db *sql.DB, action_id int64, action_name string, app_id int64, opts HttpActionOpts, environment_id int64) error {
     optsJSON, err := json.Marshal(opts)
     if err != nil {
-        return 0, err
+        return err
     }
 
     query, values := BuildInsertQuery("http_actions", map[string]any{
+        "action_id":      action_id,
         "action_name":    action_name,
         "app_id":         app_id,
         "opts":           string(optsJSON),
         "environment_id": environment_id,
-    }, []string{"action_id"})
+    }, []string{})
 
-    var actionID int64
-    err = db.QueryRow(query, values...).Scan(&actionID)
-    if err != nil {
-        return 0, err
-    }
-
-    return actionID, nil
+    _, err = db.Exec(query, values...)
+    return err
 }
 
 
-func GetHttpAction(db *sql.DB, action_id int64) (HttpAction, error) {
+func (a *ActionObj)GetHttpAction(db *sql.DB, action_id int64) (HttpAction, error) {
     var action HttpAction
     var optsJSON string
 
@@ -81,8 +78,56 @@ func GetHttpAction(db *sql.DB, action_id int64) (HttpAction, error) {
     return action, nil
 }
 
+func (a *ActionObj) GetHttpActions(db *sql.DB, ids []int64) ([]HttpAction, error) {
+    if len(ids) == 0 {
+        return []HttpAction{}, nil
+    }
 
-func UpdateHTTPAction(db *sql.DB, actionID int64, actionName string, appID int64, opts json.RawMessage, environmentID int64) error {
+    placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+    query := fmt.Sprintf(
+        "SELECT action_id, app_id, action_name, opts, environment_id FROM http_actions WHERE action_id IN (%s)",
+        placeholders,
+    )
+
+    args := make([]any, len(ids))
+    for i, id := range ids {
+        args[i] = id
+    }
+
+    rows, err := db.Query(query, args...)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+
+    var actions []HttpAction
+
+    for rows.Next() {
+        var action HttpAction
+        var optsJSON string
+
+        err := rows.Scan(
+            &action.ActionId,
+            &action.AppId,
+            &action.ActionName,
+            &optsJSON,
+            &action.EnvironmentId,
+        )
+        if err != nil {
+            return nil, err
+        }
+
+        if err := json.Unmarshal([]byte(optsJSON), &action.Opts); err != nil {
+            return nil, err
+        }
+
+        actions = append(actions, action)
+    }
+
+    return actions, rows.Err()
+}
+
+func (a *ActionObj)UpdateHTTPAction(db *sql.DB, actionID int64, actionName string, appID int64, opts json.RawMessage, environmentID int64) error {
     if !json.Valid(opts) {
         return fmt.Errorf("invalid HTTP action options JSON")
     }
@@ -117,7 +162,7 @@ func UpdateHTTPAction(db *sql.DB, actionID int64, actionName string, appID int64
     return nil
 }
 
-func DeleteHTTPAction(db *sql.DB, actionID int64) error {
+func (a *ActionObj)DeleteHTTPAction(db *sql.DB, actionID int64) error {
     query, values := BuildDeleteQuery("http_actions", map[string][]any{
         "action_id": {"=", actionID},
     })

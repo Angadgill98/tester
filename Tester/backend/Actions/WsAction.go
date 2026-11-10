@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -37,36 +38,31 @@ type WSAction struct {
 
 
 
-func CreateWSAction(db *sql.DB, app_id int64, action_name string, executor_type string, opts WSOpts, environment_id int64) (int64, error) {
+func (a *ActionObj) CreateWSAction(db *sql.DB, action_id int64, app_id int64, action_name string, executor_type string, opts WSOpts, environment_id int64) error {
     optsJSON, err := json.Marshal(opts)
     if err != nil {
-        return 0, err
+        return err
     }
 
     query, values := BuildInsertQuery("ws_actions", map[string]any{
+        "action_id":      action_id,
         "app_id":         app_id,
         "action_name":    action_name,
-        "executor_type":  executor_type,
         "opts":           string(optsJSON),
         "environment_id": environment_id,
-    }, []string{"action_id"})
+    }, []string{})
 
-    var actionID int64
-    err = db.QueryRow(query, values...).Scan(&actionID)
-    if err != nil {
-        return 0, err
-    }
-
-    return actionID, nil
+    _, err = db.Exec(query, values...)
+    return err
 }
 
-func GetWSAction(db *sql.DB, action_id int64) (WSAction, error) {
+func (a *ActionObj)GetWSAction(db *sql.DB, action_id int64) (WSAction, error) {
     var action WSAction
     var optsJSON string
 
     query, values := BuildSelectQuery(
         "ws_actions",
-        []string{"action_id", "app_id", "action_name", "executor_type", "opts", "environment_id"},
+        []string{"action_id", "app_id", "action_name", "opts", "environment_id"},
         map[string][]any{
             "action_id": {"=", action_id},
         },
@@ -91,7 +87,56 @@ func GetWSAction(db *sql.DB, action_id int64) (WSAction, error) {
     return action, nil
 }
 
-func UpdateWSAction(db *sql.DB, actionID int64, appID int64, actionName string, executorType string, opts json.RawMessage, environmentID int64) error {
+func (a *ActionObj) GetWSActions(db *sql.DB, ids []int64) ([]WSAction, error) {
+    if len(ids) == 0 {
+        return []WSAction{}, nil
+    }
+
+    placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+    query := fmt.Sprintf(
+        "SELECT action_id, app_id, action_name, opts, environment_id FROM ws_actions WHERE action_id IN (%s)",
+        placeholders,
+    )
+
+    args := make([]any, len(ids))
+    for i, id := range ids {
+        args[i] = id
+    }
+
+    rows, err := db.Query(query, args...)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+
+    var actions []WSAction
+
+    for rows.Next() {
+        var action WSAction
+        var optsJSON string
+
+        err := rows.Scan(
+            &action.ActionID,
+            &action.AppID,
+            &action.ActionName,
+            &optsJSON,
+            &action.EnvironmentID,
+        )
+        if err != nil {
+            return nil, err
+        }
+
+        if err := json.Unmarshal([]byte(optsJSON), &action.Opts); err != nil {
+            return nil, err
+        }
+
+        actions = append(actions, action)
+    }
+
+    return actions, rows.Err()
+}
+
+func (a *ActionObj)UpdateWSAction(db *sql.DB, actionID int64, appID int64, actionName string, executorType string, opts json.RawMessage, environmentID int64) error {
     if !json.Valid(opts) {
         return fmt.Errorf("invalid WebSocket action options JSON")
     }
@@ -127,7 +172,7 @@ func UpdateWSAction(db *sql.DB, actionID int64, appID int64, actionName string, 
     return nil
 }
 
-func DeleteWSAction(db *sql.DB, actionID int64) error {
+func (a *ActionObj)DeleteWSAction(db *sql.DB, actionID int64) error {
     query, values := BuildDeleteQuery("ws_actions", map[string][]any{
         "action_id": {"=", actionID},
     })

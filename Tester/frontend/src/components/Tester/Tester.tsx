@@ -4,7 +4,13 @@ import "./tester.css"
 import Sidebar from './Sidebar'
 
 export let TesterSidebarClasses={
-    container:"tester-sidebar-container"
+    container:"tester-sidebar-container",
+    buttonsContainer:"button-container",
+    actionButton:"action-button",
+    sequenceButton:"sequence-button",
+    applicationButton:"application-button",
+    buttonModaloverlay:"modal-overlay",
+    
 }
 
 const Tester = () => {

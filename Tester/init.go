@@ -42,7 +42,7 @@ func InitializeGlobalApp(db *sql.DB) error {
 	return err
 }
 func InitializeGlobalEnv(db *sql.DB) error {
-    query := `INSERT OR IGNORE INTO environments (environment_id, environment_name, keys_values) VALUES (0, 'Global', '{}')`
+    query := `INSERT OR IGNORE INTO environments (environment_id, environment_name, keys_values) VALUES (0, 'GLOBAL', '{}')`
 
     _, err := db.Exec(query)
     if err != nil {
@@ -79,11 +79,11 @@ func CreateActionsTable(db *sql.DB) error {
 	query := `
 	CREATE TABLE IF NOT EXISTS actions (
 		action_id INTEGER PRIMARY KEY AUTOINCREMENT,
-		action_type TEXT NOT NULL
+		action_type TEXT NOT NULL 
 	);`
 
 	_, err := db.Exec(query)
-	if err != nil {
+	if err != nil { 
 		return fmt.Errorf("create actions table: %w", err)
 	}
 
@@ -97,12 +97,32 @@ func CreateHTTPActionsTable(db *sql.DB) error {
 		action_name TEXT NOT NULL,
 		app_id INTEGER NOT NULL,
 		environment_id INTEGER,
+		opts TEXT NOT NULL DEFAULT '{}',
 		FOREIGN KEY (action_id) REFERENCES actions(action_id)
 	);`
 
 	_, err := db.Exec(query)
 	if err != nil {
 		return fmt.Errorf("create http_actions table: %w", err)
+	}
+
+	return nil
+}
+
+func CreateWSActionsTable(db *sql.DB) error {
+	query := `
+	CREATE TABLE IF NOT EXISTS ws_actions (
+		action_id INTEGER PRIMARY KEY AUTOINCREMENT,
+		action_name TEXT NOT NULL,
+		app_id INTEGER NOT NULL,
+		environment_id INTEGER,
+		opts TEXT NOT NULL DEFAULT '{}',
+		FOREIGN KEY (action_id) REFERENCES actions(action_id)
+	);`
+
+	_, err := db.Exec(query)
+	if err != nil {
+		return fmt.Errorf("create ws_actions table: %w", err)
 	}
 
 	return nil
@@ -152,6 +172,10 @@ func InitTables(db *sql.DB) error {
 	}
 
 	if err := CreateHTTPActionsTable(db); err != nil {
+		return err
+	}
+
+	if err := CreateWSActionsTable(db); err != nil {
 		return err
 	}
 

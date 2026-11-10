@@ -23,14 +23,22 @@ func NewActionObj(db *sql.DB) *ActionObj {
 	}
 }
 
-func (a *ActionObj) CreateAction(db *sql.DB, action_type string, action_id int) error {
+func (a *ActionObj) CreateAction(db *sql.DB, action_type string) (int64, error) {
     query, values := BuildInsertQuery("actions", map[string]any{
         "action_type": action_type,
-        "action_id":   action_id,
-    },[]string{})
+    }, []string{})
 
-    _, err := db.Exec(query, values...)
-    return err
+    result, err := db.Exec(query, values...)
+    if err != nil {
+        return 0, err
+    }
+
+    actionID, err := result.LastInsertId()
+    if err != nil {
+        return 0, err
+    }
+
+    return actionID, nil
 }
 
 func (a *ActionObj) GetActions(db *sql.DB, actionIDs []int64) ([]Action, error) {
@@ -53,13 +61,6 @@ func (a *ActionObj) GetActions(db *sql.DB, actionIDs []int64) ([]Action, error) 
     return actionsList, nil
 }
 
-func (a *ActionObj) RegisterHTTPAction(db *sql.DB, actionID int) error {
-    return a.CreateAction(db, "http", actionID)
-}
-
-func (a *ActionObj) RegisterWSAction(db *sql.DB, actionID int) error {
-    return a.CreateAction(db, "websocket", actionID)
-}
 
 func (a *ActionObj) GetActionType(db *sql.DB, action_id int) (string, error) {
     query, values := BuildSelectQuery(

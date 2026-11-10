@@ -1,12 +1,18 @@
-export interface ActionInfo {
-    Id: number;
-    Name: string;
-    Type:string
-}
 
-export interface SequenceInfo {
-    Id: number;
-    Name: string;
+
+
+
+export interface Application_f {
+    AppId: number;
+    AppName: string;
+    ParentAppId: number;
+    EnvironmentId: number | null | {
+        Int64: number;
+        Valid: boolean;
+    };
+    Actions: number[];
+    Sequences: number[];
+    Children: number[];
 }
 
 export interface ChildApplicationInfo {
@@ -14,13 +20,19 @@ export interface ChildApplicationInfo {
     Name: string;
 }
 
-export interface Application_f {
-    AppId: number;
-    AppName: string;
-    ParentAppId: number;
-    EnvironmentId: number | null;
 
-    Actions: ActionInfo[];
-    Sequences: SequenceInfo[];
-    Children: ChildApplicationInfo[];
+export interface Action_f {
+    Id: number;
+    Name: string;
+    Type: string;
+}
+
+export interface Sequence_f {
+    Id: number;
+    Name: string;
+}
+
+export interface Environment_f {
+    Id: number;
+    Name: string;
 }

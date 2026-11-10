@@ -6,6 +6,7 @@ import "database/sql"
 type ActionInfo struct {
     Id   int64
     Name string
+	Type string
 }
 
 type SequenceInfo struct {
