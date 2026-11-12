@@ -2,6 +2,8 @@ import React from 'react'
 import { TesterClasses } from '../../App'
 import "./tester.css" 
 import Sidebar from './Sidebar'
+import Tabs from './Tabs/Tabs'
+import Dashboard from './Dashboard/Dashbaord'
 
 export let TesterSidebarClasses={
     container:"tester-sidebar-container",
@@ -17,7 +19,8 @@ const Tester = () => {
   return (
     <div className={TesterClasses.container}>
         <Sidebar/>
-        asdasd
+        <Tabs/>
+        <Dashboard/>
     </div>
   )
 }

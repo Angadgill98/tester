@@ -231,6 +231,30 @@ func ConvertChildren(children []app.Application) []models.ChildApplicationInfo {
     return result
 }
 
+func (a *App) CreateApplication(app_name string, parentAppId int64) Response {
+    app, err := a.App.CreateApplication(app_name, parentAppId)
+    if err != nil {
+        return Response{
+            Success: false,
+            Error:   err.Error(),
+        }
+    }
+
+    err = a.App.RegisterChild(parentAppId, app.AppId)
+    if err != nil {
+        return Response{
+            Success: false,
+            Error:   err.Error(),
+        }
+    }
+
+    return Response{
+        Success: true,
+        Data:    app,
+        Error:   "",
+    }
+}
+
 func (a *App) CreateHttpAction(action_name string, action_type string, app_id int64) Response {
     defaultOpts := actions.HttpActionOpts{
         Method:  "GET",
@@ -296,6 +320,78 @@ func (a *App) CreateWSAction(action_name string, action_type string, app_id int6
     return Response{
         Success: true,
         Data:    action_id,
+        Error:   "",
+    }
+}
+
+func (a *App) GetHttpAction(action_id int64) Response {
+    action, err := a.Action.GetHttpAction(a.Db, action_id)
+    if err != nil {
+        return Response{
+            Success: false,
+            Error:   err.Error(),
+        }
+    }
+
+    return Response{
+        Success: true,
+        Data:    action,
+        Error:   "",
+    }
+}
+
+func (a *App) GetWSAction(action_id int64) Response {
+    action, err := a.Action.GetWSAction(a.Db, action_id)
+    if err != nil {
+        return Response{
+            Success: false,
+            Error:   err.Error(),
+        }
+    }
+
+    return Response{
+        Success: true,
+        Data:    action,
+        Error:   "",
+    }
+}
+
+func (a *App) GetSequence(sequence_id int64) Response {
+    action, err := a.Sequence.GetSequence(sequence_id)
+    if err != nil {
+        return Response{
+            Success: false,
+            Error:   err.Error(),
+        }
+    }
+
+    return Response{
+        Success: true,
+        Data:    action,
+        Error:   "",
+    }
+}
+
+func (a *App) CreateSequence(sequence_name string, app_id int64) Response {
+    sequence, err := a.Sequence.CreateSequence(sequence_name, app_id)
+    if err != nil {
+        return Response{
+            Success: false,
+            Error:   err.Error(),
+        }
+    }
+
+    err = a.App.RegisterSequence(app_id, sequence.SequenceID)
+    if err != nil {
+        return Response{
+            Success: false,
+            Error:   err.Error(),
+        }
+    }
+
+    return Response{
+        Success: true,
+        Data:    sequence,
         Error:   "",
     }
 }

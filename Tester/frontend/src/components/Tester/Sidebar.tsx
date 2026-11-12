@@ -1,6 +1,6 @@
 import React, { useContext, useEffect, useState } from 'react'
 import { TesterSidebarClasses } from './Tester'
-import { GetApplication,CreateHttpAction,CreateWSAction,GetApplications } from "../../../wailsjs/go/main/App";
+import { GetApplication,CreateHttpAction,CreateWSAction,GetApplications,CreateApplication,CreateSequence } from "../../../wailsjs/go/main/App";
 import "./sidebar.css"
 import { useGlobalStore } from '../../global';
 import { Action_f, Application_f, ChildApplicationInfo, Environment_f, Sequence_f } from '../../models/application';
@@ -16,19 +16,24 @@ const Sidebar = () => {
     const setApplications = useGlobalStore(state => state.setApplications);
     const setActions = useGlobalStore(state => state.setActions);
     const setSequences = useGlobalStore(state => state.setSequences);
-    const setChildApplications = useGlobalStore(state => state.setChildApplications);
 
-    const GlobalApplication = useGlobalStore(state => state.GlobalApplication);
-
-    const setGlobalApplication = useGlobalStore(state => state.setGlobalApplication);
+    const GlobalApplication = useGlobalStore(state => state.Applications.get(0) ?? null);
     
     const setCurrentApplicationId=useGlobalStore(state => state.setCurrentApplicationId);
+
+    const currentApplicationId = useGlobalStore(state => state.CurrentApplicationId);
+
+    const getCurrentApplication = useGlobalStore(state => state.getCurrentApplication);
     
     useEffect(() => {
         const fetchApplication = async () => {
             try {
                 const visited = new Set<number>();
                 let pendingIds = [0];
+
+                const allApplications = new Map<number, Application_f>();
+                const allActions = new Map<number, Action_f>();
+                const allSequences = new Map<number, Sequence_f>();
 
                 while (pendingIds.length > 0) {
                     pendingIds = [...new Set(pendingIds)].filter(id => !visited.has(id));
@@ -56,49 +61,36 @@ const Sidebar = () => {
                     for (const item of applications) {
                         const application = item.Application;
 
-                        // Store actions separately.
-                        for (const action of item.Actions) {
-                            setActions(action.Id, action);
-                        }
+                        item.Actions.forEach(action => allActions.set(action.Id, action));
+                        item.Sequences.forEach(sequence => allSequences.set(sequence.Id, sequence));
 
-                        // Store sequences separately.
-                        for (const sequence of item.Sequences) {
-                            setSequences(sequence.Id, sequence);
-                        }
-
-                        // Store child application information separately.
-                        for (const child of item.Children) {
-                            setChildApplications(child.Id, child);
-
+                        item.Children.forEach(child => {
                             if (!visited.has(child.Id)) {
                                 nextIds.push(child.Id);
                             }
-                        }
+                        });
 
-                        // Store only IDs inside the application.
-                        const applicationData: Application_f = {
+                        allApplications.set(application.AppId, {
                             ...application,
                             Actions: item.Actions.map(action => action.Id),
                             Sequences: item.Sequences.map(sequence => sequence.Id),
                             Children: item.Children.map(child => child.Id)
-                        };
-
-                        setApplications(applicationData.AppId, applicationData);
+                        });
                     }
 
                     pendingIds = nextIds;
                 }
 
+                // Publish everything to Zustand after fetching is complete.
                 const store = useGlobalStore.getState();
-                const rootApplication = store.Applications.get(0) ?? null;
 
-                store.setGlobalApplication(rootApplication);
-                store.setCurrentApplicationId(rootApplication?.AppId ?? null);
+                allActions.forEach((action, id) => store.setActions(id, action));
+                allSequences.forEach((sequence, id) => store.setSequences(id, sequence));
+                allApplications.forEach((application, id) => store.setApplications(id, application));
 
-                console.log("Applications:", store.Applications);
-                console.log("Actions:", store.Actions);
-                console.log("Sequences:", store.Sequences);
-                console.log("Child Applications:", store.ChildApplications);
+                store.setCurrentApplicationId(allApplications.get(0)?.AppId ?? null);
+
+                console.log("Applications:", useGlobalStore.getState().Applications);
 
             } catch (error) {
                 console.error("Failed to initialize applications:", error);
@@ -109,7 +101,7 @@ const Sidebar = () => {
     }, []);
 
 
-  let [showActions, setActionShow] = useState<boolean>(false);
+    let [showActions, setActionShow] = useState<boolean>(false);
     let [showApplications, setApplicationShow] = useState<boolean>(false);
     let [showSequences, setSequenceShow] = useState<boolean>(false);
 
@@ -132,21 +124,70 @@ const Sidebar = () => {
 
         setApplications(applicationId, updatedApplication);
 
-        if (store.GlobalApplication?.AppId === applicationId) {
-            setGlobalApplication(updatedApplication);
-        }
+       
     };
-  const handleCreateAction = () => {
+
+    const handleCreateAction = () => {
         setActionShow(prev => !prev);
     };
 
-  const handleCreateApplication = () => {
-      setApplicationShow(prev => !prev);
-  };
 
-  const handleCreateSequence = () => {
-      setSequenceShow(prev => !prev);
-  };
+    const handleCreateApplication = async () => {
+        if (currentApplicationId === null) return;
+
+        try {
+            const response = await CreateApplication("New Application", currentApplicationId);
+
+            if (!response.Success) {
+                console.error(response.Error);
+                return;
+            }
+
+            const childApp: Application_f = response.Data;
+
+            const store = useGlobalStore.getState();
+            const parentApp = store.Applications.get(currentApplicationId);
+
+            if (!parentApp) return;
+
+            setApplications(childApp.AppId, childApp);
+
+            setApplications(currentApplicationId, {
+                ...parentApp,
+                Children: [...parentApp.Children, childApp.AppId]
+            });
+
+        } catch (error) {
+            console.error("Failed to create application:", error);
+        }
+    };
+    
+    const handleCreateSequence = async () => {
+        const store = useGlobalStore.getState();
+        const currentApplication = store.getCurrentApplication();
+
+        if (!currentApplication) return;
+
+        const res = await CreateSequence("New Sequence", currentApplication.AppId);
+
+        if (!res.Success) {
+            console.error(res.Error);
+            return;
+        }
+
+        const sequence = res.Data as Sequence_f;
+
+        // Store the sequence object.
+        store.setSequences(sequence.Id, sequence);
+
+        // Add the sequence ID to its parent application.
+        store.setApplications(currentApplication.AppId, {
+            ...currentApplication,
+            Sequences: [...currentApplication.Sequences, sequence.Id]
+        });
+
+        setSequenceShow(prev => !prev);
+    };
 
     const handleCreateHttp = async () => {
         const currentApplication = useGlobalStore.getState().getCurrentApplication();
@@ -196,14 +237,14 @@ const Sidebar = () => {
             <div className={TesterSidebarClasses.applicationButton}>
                 <button onClick={handleCreateApplication}>Create Application</button>
 
-                {showApplications && (
+                {/* {showApplications && (
                     <>
                         <div className={TesterSidebarClasses.buttonModaloverlay} onClick={() => setApplicationShow(false)} />
                         <div className="applcation-modal">
                             <button>Child Application</button>
                         </div>
                     </>
-                )}
+                )} */}
             </div>
 
             <div className="action-button">
@@ -223,14 +264,14 @@ const Sidebar = () => {
             <div className={TesterSidebarClasses.sequenceButton}>
                 <button onClick={handleCreateSequence}>Create Sequence</button>
 
-                {showSequences && (
+                {/* {showSequences && (
                     <>
                         <div className={TesterSidebarClasses.buttonModaloverlay} onClick={() => setSequenceShow(false)} />
                         <div className="sequence-modal">
                             <button>Create Sequence</button>
                         </div>
                     </>
-                )}
+                )} */}
             </div>
 
         </div>
@@ -258,9 +299,12 @@ interface SidebarTemplateProps {
 }
 
 const SidebarTemplate = React.memo(({ application, classes }: SidebarTemplateProps) => {
+
+    
     const setCurrentApplicationId = useGlobalStore(state => state.setCurrentApplicationId);
 
     const setcurretnappid = () => {
+        // console.log("new current id is ",application.AppId)
         setCurrentApplicationId(application.AppId);
     };
 
@@ -269,12 +313,13 @@ const SidebarTemplate = React.memo(({ application, classes }: SidebarTemplatePro
     return (
         <div className={classes.container} >
             {application.Children.map(childId => {
-                const child = store.ChildApplications.get(childId);
+                const child = store.Applications.get(childId);
+              
 
                 if (!child) return null;
 
                 return (
-                    <SidebarApplicationTemplate key={child.Id} application={child} />
+                    <SidebarApplicationTemplate key={child.AppId} application={child} />
                 );
             })}
 
@@ -308,12 +353,29 @@ interface SidebarSequenceTemplateProps {
 }
 
 interface SidebarApplicationTemplateProps {
-    application: ChildApplicationInfo;
+    application: Application_f;
 }
 
 const SidebarActionTemplate = React.memo(({ action, updatecurrentappid }: SidebarActionTemplateProps) => {
+    const getCurrentApplicationId = useGlobalStore(state => state.getCurrentApplicationId);
+    const addToTabs = useGlobalStore(state => state.addToTabs);
+
+    const handleClick = () => {
+        updatecurrentappid();
+
+        const appId = getCurrentApplicationId();
+        if (appId === null) return;
+
+        addToTabs({
+            TypeId: action.Id,
+            AppId: appId,
+            TabType: action.Type,
+            Name:action.Name
+        });
+    };
+
     return (
-        <div className={ListTemplateClasses.item} onClick={updatecurrentappid}>
+        <div className={ListTemplateClasses.item} onClick={handleClick}>
             <div className={ListTemplateClasses.icon}>
                 {action.Type.toUpperCase()}
             </div>
@@ -323,11 +385,27 @@ const SidebarActionTemplate = React.memo(({ action, updatecurrentappid }: Sideba
 });
 
 const SidebarSequenceTemplate = React.memo(({ sequence, updatecurrentappid }: SidebarSequenceTemplateProps) => {
+    const getCurrentApplicationId = useGlobalStore(state => state.getCurrentApplicationId);
+    const addToTabs = useGlobalStore(state => state.addToTabs);
+
+    const handleClick = () => {
+        updatecurrentappid();
+
+        const appId = getCurrentApplicationId();
+        if (appId === null) return;
+
+        addToTabs({
+            TypeId: sequence.Id,
+            AppId: appId,
+            TabType: "sequence",
+            Name:sequence.Name
+        });
+    };
     return (
-        <div className={ListTemplateClasses.item} onClick={updatecurrentappid}>
+        <div className={ListTemplateClasses.item} onClick={handleClick}>
             <div className={ListTemplateClasses.icon}>S</div>
             <div>
-                <p>ID: {sequence.Id}</p>
+                {/* <p>ID: {sequence.Id}</p> */}
                 <p>Name: {sequence.Name}</p>
             </div>
         </div>
@@ -337,32 +415,29 @@ const SidebarSequenceTemplate = React.memo(({ sequence, updatecurrentappid }: Si
 const SidebarApplicationTemplate = React.memo(({ application }: SidebarApplicationTemplateProps) => {
     const [showDetails, setShowDetails] = useState<boolean>(false);
 
-    const applicationData = useGlobalStore(state => state.Applications.get(application.Id));
+    const applicationData = useGlobalStore(state => state.Applications.get(application.AppId));
     const setCurrentApplicationId = useGlobalStore(state => state.setCurrentApplicationId);
 
     const handleClick = () => {
         if (!applicationData) return;
 
         setCurrentApplicationId(applicationData.AppId);
-        setShowDetails(prev => !prev);
     };
 
     if (!applicationData) return null;
 
     return (
-        <div onClick={handleClick}>
-            <div className={ListTemplateClasses.item} >
-                <p>Name: {application.Name}</p>
-                <button type="button">
+        <div>
+            <div className={ListTemplateClasses.item}>
+                <p onClick={handleClick}>Name: {applicationData.AppName}</p>
+
+                <button type="button" onClick={() => {setShowDetails(prev => !prev);setCurrentApplicationId(applicationData.AppId);}}>
                     {showDetails ? "▲" : "▼"}
                 </button>
             </div>
 
             {showDetails && (
-                <SidebarTemplate
-                    application={applicationData}
-                    classes={ListTemplateClasses}
-                />
+                <SidebarTemplate application={applicationData} classes={ListTemplateClasses} />
             )}
         </div>
     );
