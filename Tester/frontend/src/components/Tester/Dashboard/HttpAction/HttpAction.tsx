@@ -44,8 +44,23 @@ const HttpAction = ({ tab }: HttpActionProps) => {
     };
   }, [tab.TypeId]);
 
-  if (!action) return <div>Loading HTTP action...</div>;
+  let [showreq, setshow] = useState<boolean>(true)
+  let [showbody, setshowbody] = useState<boolean>(false)
+  
+  
+  let handleReqclick = () => {
+    setshow(true)
+    setshowbody(false)
+    
+  }
 
+  let handleBodyclick = () => {
+    setshowbody(true)
+    setshow(false)
+  }
+
+  
+  if (!action) return <div>Loading HTTP action...</div>;
   return (
     <div className={HttpClasses.container}>
       <div className={HttpClasses.action}>
@@ -61,6 +76,11 @@ const HttpAction = ({ tab }: HttpActionProps) => {
         <div className={HttpClasses.actionInfo}>
           <p>Environment</p>
         </div>
+
+        <button>Settings</button>
+        <button>Toggle Temp Sequnce</button>
+        <button>Reset temp Sequnce</button>
+        <button>Execute</button>
       </div>
 
 
@@ -68,12 +88,74 @@ const HttpAction = ({ tab }: HttpActionProps) => {
         <div className={HttpClasses.main_left}>
           <p>Http Options</p>
     
-          <div>
-            <div>req</div>
+          <div className={HttpClasses.http_opts}>
+            <div className={HttpClasses.http_opts_tab}>
+              <button onClick={handleReqclick}>req</button>
+              <button onClick={handleBodyclick}>body</button>
+            </div>
+
+            {showreq && (
+                <div>
+                  <div>
+                      <label>Method</label>
+                      <select defaultValue={action.Opts.Method}>
+                          <option value="GET">GET</option>
+                          <option value="POST">POST</option>
+                          <option value="PUT">PUT</option>
+                          <option value="PATCH">PATCH</option>
+                          <option value="DELETE">DELETE</option>
+                          <option value="HEAD">HEAD</option>
+                      </select>
+                  </div>
+            
+                    <div>
+                        <label>URL</label>
+                        <input type="text" defaultValue={action.Opts.URL} />
+                    </div>
+            
+                    <div>
+                        <label>Headers</label>
+                    
+                        {Object.entries(action.Opts.Headers).map(([key, value]) => (
+                            <div key={key}>
+                                <input type="text" defaultValue={key} placeholder="Key" />
+                                <input type="text" defaultValue={String(value)} placeholder="Value" />
+                            </div>
+                        ))}
+                    </div>
+                    
+                    <div>
+                        <label>Query</label>
+                    
+                        {Object.entries(action.Opts.Query).map(([key, value]) => (
+                            <div key={key} >
+                                <input type="text" defaultValue={key} placeholder="Key" />
+                                <input type="text" defaultValue={String(value)} placeholder="Value" />
+                            </div>
+                        ))}
+                    </div>
+            
+                    <div>
+                        <label>Cookies</label>
+                    
+                        {Object.entries(action.Opts.Cookies).map(([key, value]) => (
+                            <div key={key} style={{ display: "flex", gap: "10px" }}>
+                                <input type="text" defaultValue={key} placeholder="Cookie Name" />
+                                <input type="text" defaultValue={String(value)} placeholder="Cookie Value" />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+            
+            {showbody && (
+                <div>
+                    <label>Body</label>
+                    <textarea defaultValue={JSON.stringify(action.Opts.Body, null, 2)} />
+                </div>
+            )}
     
-            <div>settings</div>
     
-            <div></div>
           </div>
 
         </div>

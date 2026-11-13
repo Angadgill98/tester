@@ -13,7 +13,14 @@ export let HttpClasses={
   actionInfo: "http-action-info",
   main: "http-main",
   main_left: "http-main-left",
-  main_right:"http-main-right"
+  main_right: "http-main-right",
+
+
+
+  http_opts: "http-opts",
+  http_opts_tab: "http-opts-tab",
+  
+  
   
 }
 const Dashboard = () => {
