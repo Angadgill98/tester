@@ -49,7 +49,7 @@ const WsAction = ({ tab }: WsActionProps) => {
             <p>Action ID: {wsAction.ActionID}</p>
             <p>App ID: {wsAction.AppID}</p>
         </div>
-    );
+    ); 
 };
 
 export default WsAction;

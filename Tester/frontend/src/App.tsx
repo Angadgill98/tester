@@ -15,7 +15,8 @@ export let SidebarClasses = {
 }
 
 export let TesterClasses={
-    container:"tester-container"
+    container:"tester-container",
+    right:"tester-right"
 }
 
 function App() {

@@ -1,0 +1,44 @@
+.http-container{
+    height:100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    
+
+    
+    background-color: red;
+    
+}
+
+
+.http-action{
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+    
+    box-sizing: border-box;
+    
+
+    background-color: springgreen;
+}
+
+.http-action-info{
+    background-color: teal;
+}
+
+.http-main{
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    height: 60vh;
+    
+    background-color: peru;
+}
+
+.http-main-left{
+    
+}
+
+.http-main-right{
+    
+}

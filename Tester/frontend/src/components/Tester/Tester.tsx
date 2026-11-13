@@ -15,12 +15,24 @@ export let TesterSidebarClasses={
     
 }
 
+export let TabsClasses={
+  container:"tab-container"
+}
+
+export let DashboardClasses = {
+  container: "dashboard-container",
+  
+}
+
 const Tester = () => {
   return (
     <div className={TesterClasses.container}>
         <Sidebar/>
-        <Tabs/>
-        <Dashboard/>
+        <div className={TesterClasses.right}>
+          <Tabs />
+          <Dashboard/>
+        </div>
+        
     </div>
   )
 }
