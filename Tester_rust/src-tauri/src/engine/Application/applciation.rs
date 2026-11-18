@@ -1,11 +1,22 @@
 
 use rusqlite::{params_from_iter, Connection};
-use serde::{Deserialize, Serialize};
 use std::error::Error;
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "PascalCase")]
+use crate::engine::{Action, Sequence};
+
 pub struct Application {
+    pub app_id: String,
+    pub app_name: String,
+    pub parent_app_id: String,
+    pub environment_id: Option<String>,
+    pub actions: Vec<Action::action::Action>,
+    pub ws_actions: Vec<Action::WsAction::WSAction>,
+    pub http_actions: Vec<Action::HttpAction::HttpAction>,
+    pub sequences: Vec<Sequence::sequence::Sequence>,
+    pub children: Vec<Application>,
+}
+
+pub struct ApplicationRepo {
     pub app_id: String,
     pub app_name: String,
     pub parent_app_id: String,
@@ -19,29 +30,29 @@ pub struct ApplicationObj;
 
 impl ApplicationObj {
     pub fn create_application_obj() -> Self {
-        Self {}
+        Self
     }
 
-    pub fn create_application(&self, db: &Connection, app_name: &str, parent_app_id: String) -> Result<Application, Box<dyn Error>> {
+    pub fn create_application(&self, db: &Connection, app_name: &str, parent_app_id: String) -> Result<ApplicationRepo, Box<dyn Error>> {
         let app_id = uuid::Uuid::new_v4().to_string();
-    
+
         let actions: Vec<String> = Vec::new();
         let sequences: Vec<String> = Vec::new();
         let children: Vec<String> = Vec::new();
-    
+
         let actions_json = serde_json::to_string(&actions)?;
         let sequences_json = serde_json::to_string(&sequences)?;
         let children_json = serde_json::to_string(&children)?;
-    
+
         let query = "
             INSERT INTO applications
             (id, name, parent_app_id, action_ids, sequence_ids, children)
             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
         ";
-    
+
         db.execute(query, (&app_id, app_name, &parent_app_id, actions_json, sequences_json, children_json))?;
-    
-        Ok(Application {
+
+        Ok(ApplicationRepo {
             app_id,
             app_name: app_name.to_string(),
             parent_app_id,
@@ -51,8 +62,8 @@ impl ApplicationObj {
             children,
         })
     }
-    
-    pub fn get_application_by_id(&self, db: &Connection, app_id: String) -> Result<Application, Box<dyn Error>> {
+
+    pub fn get_application_by_id(&self, db: &Connection, app_id: String) -> Result<ApplicationRepo, Box<dyn Error>> {
         let query = "
             SELECT id, name, parent_app_id, environment_id,
                    action_ids, sequence_ids, children
@@ -73,11 +84,11 @@ impl ApplicationObj {
                 ))
             })?;
 
-        let actions = serde_json::from_str(&actions_json)?;
-        let sequences = serde_json::from_str(&sequences_json)?;
-        let children = serde_json::from_str(&children_json)?;
+        let actions: Vec<String> = serde_json::from_str(&actions_json)?;
+        let sequences: Vec<String> = serde_json::from_str(&sequences_json)?;
+        let children: Vec<String> = serde_json::from_str(&children_json)?;
 
-        Ok(Application {
+        Ok(ApplicationRepo {
             app_id,
             app_name,
             parent_app_id,
@@ -88,7 +99,7 @@ impl ApplicationObj {
         })
     }
 
-    pub fn get_applications_by_ids(&self, db: &Connection, app_ids: Vec<String>) -> Result<Vec<Application>, Box<dyn Error>> {
+    pub fn get_applications_by_ids(&self, db: &Connection, app_ids: Vec<String>) -> Result<Vec<ApplicationRepo>, Box<dyn Error>> {
         if app_ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -125,14 +136,18 @@ impl ApplicationObj {
         for row in rows {
             let (app_id, app_name, parent_app_id, environment_id, actions_json, sequences_json, children_json) = row?;
 
-            applications.push(Application {
+            let actions: Vec<String> = serde_json::from_str(&actions_json)?;
+            let sequences: Vec<String> = serde_json::from_str(&sequences_json)?;
+            let children: Vec<String> = serde_json::from_str(&children_json)?;
+
+            applications.push(ApplicationRepo {
                 app_id,
                 app_name,
                 parent_app_id,
                 environment_id,
-                actions: serde_json::from_str(&actions_json)?,
-                sequences: serde_json::from_str(&sequences_json)?,
-                children: serde_json::from_str(&children_json)?,
+                actions,
+                sequences,
+                children,
             });
         }
 

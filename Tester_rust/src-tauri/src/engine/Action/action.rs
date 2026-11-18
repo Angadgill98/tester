@@ -104,7 +104,3 @@ pub struct Action{
     pub action_type:String
 }
 
-impl Action {
-    
-
-}

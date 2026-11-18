@@ -3,3 +3,4 @@ pub mod Sequence;
 pub mod Application;
 mod Environment;
 mod Db;
+mod Tester;

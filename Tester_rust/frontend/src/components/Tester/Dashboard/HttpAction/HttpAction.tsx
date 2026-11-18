@@ -546,16 +546,20 @@ const HttpAction = ({ tab }: HttpActionProps) => {
 
                 <div className={HttpClasses.http_rows_third}>
                     <div className={HttpClasses.http_opts_field}>
-                        preview url
-                        <span>{preview_req}</span>
-                        <button onClick={handleCopyPreviewUrl}>Copy</button>
+                      preview url
+                      <div style={{height:"100%",width:"100%"}}>
+                          <span>{preview_req}</span>
+                          <button onClick={handleCopyPreviewUrl}>Copy</button>
+                      </div>
                     </div>
                 
                     <div className={HttpClasses.http_opts_field}>
-                        curl req
-                        <span>{curl_req}</span>
-                        <button onClick={handleCopyCurlRequest}>Copy</button>
-                    </div>
+                      curl req
+                      <div style={{height:"100%",width:"100%"}}>
+                          <span>{curl_req}</span>
+                          <button onClick={handleCopyCurlRequest}>Copy</button>
+                      </div>
+                  </div>
                 </div>
                 
               </div>
