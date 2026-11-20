@@ -1,0 +1,100 @@
+.tester-sidebar-container{
+    height: 100vh;
+    width: 17%;
+
+    display: flex;
+    flex-direction: column;
+
+
+    background-color: bisque;
+}
+
+
+
+
+
+.button-container {
+    display: flex;
+    flex-direction: row;
+}
+
+.application-button,
+.action-button,
+.sequence-button {
+    position: relative;
+    display: inline-block;
+}
+
+
+.action-button {
+    position: relative;
+}
+
+.action-modal {
+    position: absolute;
+    top: 100%;
+    left: 0;
+
+
+
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+
+    z-index: 10000;
+}
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 100vw;
+    z-index: 9999;
+}
+
+
+
+.sidebar-list-container{
+    display: flex;
+    flex-direction: column;
+
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+
+    box-sizing: border-box;
+
+
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.sidebar-list-item {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+
+    border: 1px solid #ccc;
+    box-sizing: border-box;
+
+
+    background-color: aquamarine;
+}
+
+
+.sidebarlisticon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 15%;
+ 
+    background-color: burlywood;
+}
+
+.sidebar-list-item-name{
+    width: 100%;
+
+    background-color: cadetblue;
+}
