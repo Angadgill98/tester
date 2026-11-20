@@ -17,25 +17,15 @@ pub struct Sequence {
     pub app_id: String,
     pub sequence_name: String,
     pub actions: Vec<Action::action::Action>,
-    pub root_sequences: Vec<String>,
+    pub root_sequences: HashMap<String, SubSequence>,
     pub sub_sequences: HashMap<String, SubSequence>,
     pub next: Option<String>,
 }
 pub struct SubSequence {
+    pub sub_id:String,
     pub order:String,
     pub actions: Vec<String>,
     pub next: Vec<String>,
-}
-
-pub struct SequenceRepo {
-    pub sequence_id: String,
-    pub app_id: String,
-    pub sequence_name: String,
-    pub action_ids: Vec<String>,
-    pub root_sequences: Vec<String>,
-    pub sub_sequences: Vec<u8>,
-    pub next: Option<String>,
-
 }
 
 impl SequenceObj {
